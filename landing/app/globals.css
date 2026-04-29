@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Root ───────────────────────────────────────────────── */
+:root {
+  --bg: #050505;
+  --accent: #39FF14;
+  --accent-dim: #27B30E;
+  --text: #ffffff;
+  --muted: #444444;
+  --border: #1A1A1A;
+  --surface: #0A0A0A;
+}
+
+html {
+  scroll-behavior: auto; /* framer motion handles smooth scrolling */
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+body {
+  background-color: var(--bg);
+  font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ─── Custom Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 0;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #39FF14;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1a1a1a #050505;
+}
+
+/* ─── Selection ─────────────────────────────────────────── */
+::selection {
+  background: #39FF14;
+  color: #000000;
+}
+
+/* ─── Mono utility ──────────────────────────────────────── */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* ─── Cursor blink ───────────────────────────────────────── */
+.cursor-blink::after {
+  content: '█';
+  animation: cursorBlink 0.8s step-end infinite;
+  color: #39FF14;
+  margin-left: 2px;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ─── Neon glow ─────────────────────────────────────────── */
+.neon-glow {
+  text-shadow:
+    0 0 10px rgba(57, 255, 20, 0.8),
+    0 0 20px rgba(57, 255, 20, 0.4),
+    0 0 40px rgba(57, 255, 20, 0.2);
+}
+
+/* ─── Terminal border ────────────────────────────────────── */
+.terminal-border {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.terminal-border-accent {
+  border: 1px solid var(--accent);
+}
+
+/* ─── Accent left border ─────────────────────────────────── */
+.accent-left {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+}
+
+/* ─── Progress bar ───────────────────────────────────────── */
+.progress-bar {
+  height: 1px;
+  background: linear-gradient(to right, #39FF14, #27B30E);
+  transform-origin: left;
+}
+
+/* ─── Section label ──────────────────────────────────────── */
+.section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ─── Stat number ────────────────────────────────────────── */
+.stat-number {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  line-height: 1;
+}
+
+/* ─── CTA primary ────────────────────────────────────────── */
+.cta-primary {
+  background: var(--accent);
+  color: #000000;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-radius: 0;
+  cursor: crosshair;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.cta-primary:hover {
+  background: #27B30E;
+  transform: translateY(-1px);
+}
+
+.cta-primary:active {
+  transform: translateY(0);
+}
+
+/* ─── CTA secondary ─────────────────────────────────────── */
+.cta-secondary {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-family: 'JetBrains Mono', monospace;
+  border-radius: 0;
+  cursor: crosshair;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.cta-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: #ffffff;
+}
+
+/* ─── Horizontal rule ────────────────────────────────────── */
+.hr-accent {
+  border: none;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.hr-accent-green {
+  border: none;
+  border-top: 1px solid var(--accent);
+  width: 100%;
+}
+
+/* ─── Comparison table ───────────────────────────────────── */
+.comparison-table th,
+.comparison-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+/* ─── Objection block ────────────────────────────────────── */
+.objection-header {
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.objection-header:hover {
+  color: var(--accent);
+}
+
+/* ─── Timeline ───────────────────────────────────────────── */
+.timeline-line {
+  width: 1px;
+  background: #1A1A1A;
+}
+
+.timeline-line-active {
+  background: linear-gradient(to bottom, var(--accent), #1A1A1A);
+}
+
+/* ─── Swatch hover ───────────────────────────────────────── */
+.theme-swatch {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  cursor: crosshair;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px currentColor;
+}
+
+/* ─── Canvas container ───────────────────────────────────── */
+#canvas-container {
+  isolation: isolate;
+}
+
+/* ─── Code block syntax colors ───────────────────────────── */
+.code-keyword { color: #39FF14; }
+.code-string  { color: #FFB86C; }
+.code-comment { color: #444444; }
+.code-prop    { color: #8BE9FD; }
+.code-num     { color: #BD93F9; }

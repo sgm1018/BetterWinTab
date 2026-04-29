@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "BetterWinTab (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "BetterWinTab (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

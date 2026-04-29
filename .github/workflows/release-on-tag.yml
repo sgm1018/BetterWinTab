@@ -1,0 +1,156 @@
+name: Release On Tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag belongs to main
+        id: validate_tag
+        shell: pwsh
+        run: |
+          git fetch origin main --force
+          $remoteBranches = git branch -r --contains "$env:GITHUB_SHA"
+
+          if ($remoteBranches -match 'origin/main') {
+            "is_main_tag=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Tag commit is reachable from origin/main."
+          }
+          else {
+            "is_main_tag=false" >> $env:GITHUB_OUTPUT
+            Write-Host "Tag commit is not reachable from origin/main. Release will be skipped."
+          }
+
+      - name: Extract release version
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "publish_dir=bin/Release/net8.0-windows10.0.19041.0/win-x64/publish" >> $env:GITHUB_OUTPUT
+          "installer_path=installer-output/BetterWinTab-Setup-$version-x64.exe" >> $env:GITHUB_OUTPUT
+          "portable_zip=installer-output/BetterWinTab-$version-win-x64-portable.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET 8
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install Inno Setup
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Download WebView2 bootstrapper
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path redist -Force | Out-Null
+          Invoke-WebRequest `
+            -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' `
+            -OutFile 'redist/MicrosoftEdgeWebview2Setup.exe'
+
+      - name: Restore dependencies
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        run: dotnet restore BetterWinTab.csproj
+
+      - name: Publish x64 build
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: |
+          dotnet publish BetterWinTab.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:PublishProfile=win-x64.pubxml
+
+      - name: Build installer
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found at $iscc"
+          }
+
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
+
+      - name: Build portable zip
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: |
+          $publishDir = "${{ steps.version.outputs.publish_dir }}"
+          $portableZip = "${{ steps.version.outputs.portable_zip }}"
+
+          if (-not (Test-Path $publishDir)) {
+            throw "Publish output not found at $publishDir"
+          }
+
+          New-Item -ItemType Directory -Path installer-output -Force | Out-Null
+          if (Test-Path $portableZip) {
+            Remove-Item $portableZip -Force
+          }
+
+          Compress-Archive -Path "$publishDir\*" -DestinationPath $portableZip
+
+      - name: Create GitHub release
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $installer = "${{ steps.version.outputs.installer_path }}"
+          $portableZip = "${{ steps.version.outputs.portable_zip }}"
+
+          if (-not (Test-Path $installer)) {
+            throw "Installer not found at $installer"
+          }
+
+          if (-not (Test-Path $portableZip)) {
+            throw "Portable zip not found at $portableZip"
+          }
+
+          gh release view $tag *> $null
+
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag `
+              $installer `
+              $portableZip `
+              --clobber
+          }
+          else {
+            gh release create $tag `
+              $installer `
+              $portableZip `
+              --title "BetterWinTab $tag" `
+              --notes "Automated release for $tag"
+          }
+
+      - name: Skip non-main tag
+        if: steps.validate_tag.outputs.is_main_tag != 'true'
+        shell: pwsh
+        run: Write-Host "Skipping release because the tag commit is not on main."

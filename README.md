@@ -1,6 +1,7 @@
 # BetterWinTab
-
-<img width="254" height="265" alt="image" src="https://github.com/user-attachments/assets/aea51c2e-53df-43b5-965b-28b34e43e75b" />
+<div align="center">
+  <img width="254" height="265" alt="image" src="https://github.com/user-attachments/assets/aea51c2e-53df-43b5-965b-28b34e43e75b" />
+</div>
 
 <!-- VIDEO -->
 https://github.com/user-attachments/assets/43d3c613-c7c2-45a5-be38-eede70fd772a

@@ -283,3 +283,13 @@ installer-output\BetterWinTab-Setup-1.0.0-x64.exe
 BetterWinTab is released under the **MIT License**.
 
 Built by **sgm108**.
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=sgm1018%2FBetterWinTab&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sgm1018/BetterWinTab&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sgm1018/BetterWinTab&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sgm1018/BetterWinTab&type=date&legend=top-left" />
+ </picture>
+</a>

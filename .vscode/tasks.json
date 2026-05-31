@@ -1,0 +1,80 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "kill-betterwintab",
+            "type": "shell",
+            "command": "Stop-Process -Name BetterWinTab -Force -ErrorAction SilentlyContinue; exit 0",
+            "problemMatcher": []
+        },
+        {
+            "label": "build-x64",
+            "command": "dotnet",
+            "type": "process",
+            "dependsOn": "kill-betterwintab",
+            "args": [
+                "build",
+                "${workspaceFolder}/BetterWinTab.csproj",
+                "-p:Platform=x64",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "dependsOn": "kill-betterwintab",
+            "args": [
+                "build",
+                "${workspaceFolder}/BetterWinTab.csproj",
+                "-p:Platform=x64",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "publish",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/BetterWinTab.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "watch",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/BetterWinTab.csproj",
+                "-p:Platform=x64",
+                "--runtime",
+                "win-x64"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "run-x64",
+            "type": "shell",
+            "dependsOn": "build-x64",
+            "command": "Start-Process",
+            "args": [
+                "'${workspaceFolder}/bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/BetterWinTab.exe'"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

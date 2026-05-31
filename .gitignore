@@ -1,0 +1,126 @@
+## -------------------------------------------------------
+## .NET / C# / WinUI / WinAppSDK
+## -------------------------------------------------------
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+out/
+
+# MSBuild / Roslyn generated files
+*.g.cs
+*.g.i.cs
+*.AssemblyInfo.cs
+*.AssemblyInfoInputs.cache
+*.GeneratedMSBuildEditorConfig.editorconfig
+*.GlobalUsings.g.cs
+
+# WinUI / UWP compiled artifacts
+*.xbf
+*.xr.xml
+*.pri
+AppxManifest.xml
+
+# MSBuild incremental build files
+*.Up2Date
+*.FileListAbsolute.txt
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+*.nuget.json
+.nuget/
+packages/
+
+# Publish output
+publish/
+PublishProfiles/publish/
+
+# Installer output
+installer-output/
+
+# Compiled binaries (build artifacts)
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.map
+*.exp
+*.lib
+
+## -------------------------------------------------------
+## Visual Studio / IDEs
+## -------------------------------------------------------
+
+# Visual Studio cache/options
+.vs/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+# JetBrains Rider
+.idea/
+.idea_modules/
+*.sln.iml
+
+## -------------------------------------------------------
+## OS / Environment
+## -------------------------------------------------------
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# Local environment / secrets
+.env
+.env.local
+.env.*.local
+network-security.policy
+docs
+
+
+.github/skills/

@@ -30,10 +30,27 @@ public class WindowInfo
     /// <summary>True when the user has pinned/favorited this window.</summary>
     public bool IsPinned { get; set; } = false;
 
-    public override bool Equals(object? obj) =>
-        obj is WindowInfo other && Handle == other.Handle;
+    /// <summary>True when this item represents a browser tab rather than a top-level window.</summary>
+    public bool IsBrowserTab { get; set; }
+    public string BrowserName { get; set; } = string.Empty;
+    public string BrowserTabId { get; set; } = string.Empty;
+    public string BrowserWindowId { get; set; } = string.Empty;
+    public int BrowserProcessId { get; set; }
+    public int BrowserDebugPort { get; set; }
+    public string FaviconUrl { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
 
-    public override int GetHashCode() => Handle.GetHashCode();
+    public override bool Equals(object? obj) =>
+        obj is WindowInfo other &&
+        (IsBrowserTab || other.IsBrowserTab
+            ? IsBrowserTab == other.IsBrowserTab &&
+              BrowserName.Equals(other.BrowserName, StringComparison.OrdinalIgnoreCase) &&
+              BrowserTabId == other.BrowserTabId
+            : Handle == other.Handle);
+
+    public override int GetHashCode() => IsBrowserTab
+        ? HashCode.Combine(BrowserName.ToUpperInvariant(), BrowserTabId)
+        : Handle.GetHashCode();
 
     public override string ToString() => $"{ProcessName}: {Title}";
 }

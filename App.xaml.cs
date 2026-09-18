@@ -98,6 +98,10 @@ namespace BetterWinTab
         {
             ServiceContainer.RegisterSingleton(() => new SettingsService());
             ServiceContainer.RegisterSingleton(() => new WindowEnumerationService());
+            ServiceContainer.RegisterSingleton(() => new BrowserTabBridgeService(
+                ServiceContainer.Resolve<WindowEnumerationService>()));
+            ServiceContainer.RegisterSingleton(() => new BrowserTabService(
+                ServiceContainer.Resolve<BrowserTabBridgeService>()));
             ServiceContainer.RegisterSingleton(() => new FolderService(ServiceContainer.Resolve<WindowEnumerationService>()));
             ServiceContainer.RegisterSingleton(() => new LaunchService());
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
@@ -182,6 +186,16 @@ namespace BetterWinTab
             try
             {
                 _hotkeyService?.Dispose();
+            }
+
+            catch
+            {
+                // Best-effort cleanup only.
+            }
+
+            try
+            {
+                ServiceContainer.Resolve<BrowserTabBridgeService>().Dispose();
             }
             catch
             {

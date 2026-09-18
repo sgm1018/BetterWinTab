@@ -547,14 +547,36 @@
                                     <!-- Fallback icon shown when DWM thumbnail not available -->
                                     <StackPanel
                                         VerticalAlignment="Center"
-                                        HorizontalAlignment="Center"
-                                        Opacity="0.3">
+                                        HorizontalAlignment="Center">
                                         <FontIcon
-                                            Glyph="&#xE737;"
-                                            FontSize="28"
+                                            Glyph="{x:Bind BrowserIconGlyph}"
+                                            FontSize="34"
+                                            Opacity="0.35"
                                             Foreground="{StaticResource NeonGreenDimBrush}" />
+                                        <Image Source="{x:Bind BrowserFavicon}"
+                                               Width="28"
+                                               Height="28"
+                                               Stretch="Uniform"
+                                               Opacity="1"
+                                               Margin="0,8,0,0" />
                                     </StackPanel>
                                 </Border>
+
+                                    <Border Grid.Row="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top"
+                                            Margin="8"
+                                            Padding="6,2"
+                                            CornerRadius="3"
+                                            Background="#CC0D3D06"
+                                            BorderBrush="{StaticResource NeonGreenDimBrush}"
+                                            BorderThickness="1"
+                                            Visibility="{x:Bind IsBrowserTab, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="TAB"
+                                                   FontSize="9"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource NeonGreenBrush}" />
+                                    </Border>
 
                                 <!-- Desktop badge — visible in title strip when window is on another desktop) -->
                                 <Border
@@ -795,7 +817,7 @@
                     <StackPanel>
                         <TextBlock Text="Clipboard History" FontSize="{StaticResource FontSizeLarge}"
                                    FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock FontSize="{StaticResource FontSizeSmall}" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0">
+                        <TextBlock>
                             <Run Text="{x:Bind ViewModel.ClipboardHistory.Count, Mode=OneWay}" /> items captured
                         </TextBlock>
                     </StackPanel>
@@ -1888,6 +1910,64 @@
                                                       VerticalAlignment="Center"
                                                       Margin="16,0,0,0" />
                                     </Grid>
+                                </Border>
+
+                                <!-- Global Hotkey -->
+                                <!-- Browser tabs -->
+                                <Border Background="{StaticResource CardSurfaceBrush}" CornerRadius="8" Padding="16,12">
+                                    <StackPanel Spacing="10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Browser tabs"
+                                                           FontSize="{StaticResource FontSizeBase}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                                                <TextBlock Text="Search and activate tabs from Chromium browsers."
+                                                           FontSize="{StaticResource FontSizeSmall}"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock Text="{x:Bind ViewModel.Settings.BrowserTabsStatusText, Mode=OneWay}"
+                                                           FontSize="{StaticResource FontSizeSmall}"
+                                                           Foreground="{StaticResource NeonGreenDimBrush}"
+                                                           Margin="0,4,0,0" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1"
+                                                          IsOn="{x:Bind ViewModel.Settings.SettingsBrowserTabsEnabled, Mode=TwoWay}"
+                                                          OffContent="" OnContent=""
+                                                          VerticalAlignment="Center" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <CheckBox Content="Chrome"
+                                                      IsChecked="{x:Bind ViewModel.Settings.SettingsChromeTabsEnabled, Mode=TwoWay}" />
+                                            <CheckBox Content="Edge"
+                                                      IsChecked="{x:Bind ViewModel.Settings.SettingsEdgeTabsEnabled, Mode=TwoWay}" />
+                                            <CheckBox Content="Brave"
+                                                      IsChecked="{x:Bind ViewModel.Settings.SettingsBraveTabsEnabled, Mode=TwoWay}" />
+                                        </StackPanel>
+                                                <TextBlock Text="Extension IDs"
+                                                       FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                                <TextBox Header="Chrome"
+                                                     Text="{x:Bind ViewModel.Settings.SettingsChromeExtensionId, Mode=TwoWay}"
+                                                     PlaceholderText="32 lowercase letters" />
+                                                <TextBox Header="Edge"
+                                                     Text="{x:Bind ViewModel.Settings.SettingsEdgeExtensionId, Mode=TwoWay}"
+                                                     PlaceholderText="Optional" />
+                                                <TextBox Header="Brave"
+                                                     Text="{x:Bind ViewModel.Settings.SettingsBraveExtensionId, Mode=TwoWay}"
+                                                     PlaceholderText="Optional" />
+                                                <Button Content="Register browser integration"
+                                                    Command="{x:Bind ViewModel.Settings.RegisterBrowserNativeHostCommand}"
+                                                    Style="{StaticResource NeonButtonStyle}"
+                                                    HorizontalAlignment="Left" />
+                                                <TextBlock Text="{x:Bind ViewModel.Settings.BrowserIntegrationStatusText, Mode=OneWay}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
                                 </Border>
 
                                 <!-- Global Hotkey -->

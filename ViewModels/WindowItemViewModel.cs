@@ -1,5 +1,6 @@
 using BetterWinTab.Models;
 using BetterWinTab.Services;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace BetterWinTab.ViewModels;
 
@@ -52,6 +53,17 @@ public partial class WindowItemViewModel : BaseViewModel
     /// Empty when there is only one segment.
     /// </summary>
     public string TitlePrefix { get; }
+    public bool IsBrowserTab => Model.IsBrowserTab;
+    public string SourceLabel => Model.IsBrowserTab ? $"{Model.BrowserName} · tab" : ProcessName;
+    public string BrowserBadge => Model.IsBrowserTab ? "TAB" : string.Empty;
+    public string BrowserIconGlyph => Model.BrowserName switch
+    {
+        "Chrome" => "\uE774",
+        "Edge" => "\uE774",
+        "Brave" => "\uE774",
+        _ => "\uE737"
+    };
+    public BitmapImage? BrowserFavicon { get; }
 
     public WindowItemViewModel(WindowInfo model, bool hasMultipleDesktops = false)
     {
@@ -61,6 +73,7 @@ public partial class WindowItemViewModel : BaseViewModel
         _isMinimized = model.IsMinimized;
         _isPinned = model.IsPinned;
         Title = model.Title;
+        BrowserFavicon = CreateFavicon(model.FaviconUrl, model.Url);
 
         // Desktop badge
         DesktopNumber = model.DesktopNumber;
@@ -71,7 +84,9 @@ public partial class WindowItemViewModel : BaseViewModel
                          : "";
         ShowDesktopBadge = hasMultipleDesktops && !model.IsOnCurrentDesktop && model.DesktopNumber > 0;
 
-        var parts = model.Title.Split(" - ", StringSplitOptions.RemoveEmptyEntries);
+        var parts = model.IsBrowserTab
+            ? Array.Empty<string>()
+            : model.Title.Split(" - ", StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 2)
         {
             DisplayTitle = TruncateTitle(parts[1].Trim(), 30);
@@ -88,5 +103,22 @@ public partial class WindowItemViewModel : BaseViewModel
     {
         if (title.Length <= maxLength) return title;
         return title[..(maxLength - 3)] + "...";
+    }
+
+    private static BitmapImage? CreateFavicon(string faviconUrl, string pageUrl)
+    {
+        var url = faviconUrl;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            if (!Uri.TryCreate(pageUrl, UriKind.Absolute, out var pageUri) ||
+                (pageUri.Scheme != Uri.UriSchemeHttp && pageUri.Scheme != Uri.UriSchemeHttps))
+                return null;
+
+            url = $"https://www.google.com/s2/favicons?sz=64&domain_url={Uri.EscapeDataString(pageUrl)}";
+            uri = new Uri(url);
+        }
+
+        return new BitmapImage(uri);
     }
 }

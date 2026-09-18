@@ -13,6 +13,12 @@ public partial class OnboardingViewModel : BaseViewModel
         _settings = settings;
         _settingsService = settingsService;
         IsOnboardingVisible = !_settings.HasCompletedOnboarding;
+
+        if (IsOnboardingVisible)
+        {
+            _settings.HasCompletedOnboarding = true;
+            _settingsService.Save(_settings);
+        }
     }
 
     [ObservableProperty]

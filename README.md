@@ -109,6 +109,68 @@ BetterWinTab is designed for flow:
 
 The activation hotkey can be changed from **Settings -> General**.
 
+### Browser Tabs
+
+Enable **Browser tabs** in **Settings -> General** to include tabs from Chrome,
+Edge, and Brave in the same search as windows. The integration has two parts:
+the unpacked Chromium extension and a small Native Messaging host that connects
+the extension to BetterWinTab. It does not require remote debugging.
+
+#### Build And Install The Chromium Integration
+
+Run these commands from the repository root (`BetterWinTab`):
+
+```powershell
+# Build the Native Messaging host
+dotnet build BrowserExtension\NativeHost\BetterWinTab.NativeHost.csproj -c Release
+```
+
+Then load the extension in every Chromium browser you want to use:
+
+1. Open `chrome://extensions`, `edge://extensions`, or `brave://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the repository's `BrowserExtension` folder.
+5. Copy the extension ID shown for each browser. Chrome, Edge, and Brave may assign different IDs.
+
+Register the Native Messaging host from the repository root. Replace the
+example values with the IDs copied in the previous step:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\BrowserExtension\install-native-host.ps1 `
+  -ExtensionId "CHROME_EXTENSION_ID","EDGE_EXTENSION_ID","BRAVE_EXTENSION_ID"
+```
+
+You can also complete this step from the BetterWinTab UI. Open
+**Settings -> General -> Browser tabs**, paste each browser's extension ID into
+the matching field, and click **Register browser integration**. BetterWinTab
+will copy the Native Messaging host to `%LocalAppData%`, register it for the
+current Windows user, and show the result in the settings panel. Administrator
+permissions are not required.
+
+You can pass only the browsers you use. For example, Chrome only:
+
+```powershell
+.\BrowserExtension\install-native-host.ps1 -ExtensionId "CHROME_EXTENSION_ID"
+```
+
+Finally, reload the extension in each browser, restart BetterWinTab, and enable
+**Settings -> General -> Browser tabs**. The browser tab title and URL will then
+appear in the normal BetterWinTab search, and pressing `Enter` will activate the
+tab in its browser window.
+
+After changing `background.js` or `manifest.json`, click **Reload** on the
+extension card. After rebuilding the Native Messaging host, restart the browser
+and BetterWinTab so the new host executable is used.
+
+Each tab card shows the browser icon and the tab's favicon when the site
+provides one. Chromium's normal extension API does not provide screenshots of
+all background tabs; a live tab image is only available for the currently
+visible tab with additional capture permissions.
+
+Firefox is detected in Settings, but its extension bridge is not included yet.
+
 ### Clipboard History
 
 BetterWinTab includes a focused clipboard panel for recent text items. It is built to open quickly, stay clean, and work from the keyboard.

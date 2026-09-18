@@ -1,0 +1,9 @@
+﻿{
+    "name":  "com.betterwintab.tabs",
+    "description":  "BetterWinTab Chromium tab bridge",
+    "path":  "C:\\Users\\sergio.gonzalez\\Desktop\\Yo\\Mio\\BetterWinTab\\BrowserExtension\\NativeHost\\bin\\Release\\net8.0\\BetterWinTab.NativeHost.exe",
+    "type":  "stdio",
+    "allowed_origins":  [
+                            "chrome-extension://pphniiiampkifiaafeeppaaneppkhifd/"
+                        ]
+}

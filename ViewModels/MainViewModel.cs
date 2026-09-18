@@ -13,6 +13,8 @@ namespace BetterWinTab.ViewModels;
 public partial class MainViewModel : BaseViewModel
 {
     private readonly WindowEnumerationService _windowService;
+    private readonly BrowserTabService _browserTabService;
+    private readonly BrowserTabBridgeService _browserTabBridgeService;
     private readonly FolderService _folderService;
     private readonly SettingsService _settingsService;
     private readonly AppSettings _settings;
@@ -397,6 +399,8 @@ public partial class MainViewModel : BaseViewModel
     public MainViewModel()
     {
         _windowService = ServiceContainer.Resolve<WindowEnumerationService>();
+        _browserTabService = ServiceContainer.Resolve<BrowserTabService>();
+        _browserTabBridgeService = ServiceContainer.Resolve<BrowserTabBridgeService>();
         _settingsService = ServiceContainer.Resolve<SettingsService>();
         _settings = _settingsService.Load();
         _folderService = ServiceContainer.Resolve<FolderService>();
@@ -407,6 +411,8 @@ public partial class MainViewModel : BaseViewModel
         Settings = new SettingsViewModel(_settings, _settingsService);
         Settings.AppearanceChanged += () => AppearanceChanged?.Invoke();
         Settings.ClipboardEnabledChanged += OnClipboardEnabledChanged;
+        Settings.BrowserTabsChanged += RefreshWindows;
+        _browserTabBridgeService.TabsChanged += RefreshWindows;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
 
         Title = "BetterWinTab";
@@ -571,6 +577,9 @@ public partial class MainViewModel : BaseViewModel
         {
             foreach (var w in selectedModel.Windows)
                 _cachedFolderWindows.Add(w);
+
+            if (selectedModel.Type == FolderType.All && _settings.BrowserTabs.Enabled)
+                _cachedFolderWindows.AddRange(_browserTabService.GetTabs(_settings.BrowserTabs));
         }
 
         // WindowInfo objects are shared references across folders, so they
@@ -791,6 +800,13 @@ public partial class MainViewModel : BaseViewModel
 
         var handle = SelectedWindow.Model.Handle;
 
+        if (SelectedWindow.Model.IsBrowserTab)
+        {
+            _browserTabService.ActivateTab(SelectedWindow.Model);
+            IsOverlayVisible = false;
+            return;
+        }
+
         // Move window to current desktop if it's on another one
         if (!SelectedWindow.IsOnCurrentDesktop)
         {
@@ -808,7 +824,7 @@ public partial class MainViewModel : BaseViewModel
     public void CloseWindow(WindowItemViewModel? target = null)
     {
         var w = target ?? SelectedWindow;
-        if (w == null) return;
+        if (w == null || w.Model.IsBrowserTab) return;
 
         NativeMethods.PostMessage(w.Model.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
 
@@ -830,7 +846,7 @@ public partial class MainViewModel : BaseViewModel
     public void MinimizeWindow(WindowItemViewModel? target = null)
     {
         var w = target ?? SelectedWindow;
-        if (w == null) return;
+        if (w == null || w.Model.IsBrowserTab) return;
 
         NativeMethods.ShowWindow(w.Model.Handle, NativeMethods.SW_MINIMIZE);
         w.IsMinimized = true;

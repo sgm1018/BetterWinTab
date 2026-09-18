@@ -71,6 +71,27 @@ public class AppSettings
     /// Whether the first-run onboarding walkthrough has been completed or skipped.
     /// </summary>
     public bool HasCompletedOnboarding { get; set; } = false;
+
+    /// <summary>
+    /// Browser tab discovery settings supplied by the Chromium extension bridge.
+    /// </summary>
+    public BrowserTabSettings BrowserTabs { get; set; } = new();
+}
+
+public class BrowserTabSettings
+{
+    public bool Enabled { get; set; } = false;
+    public bool ChromeEnabled { get; set; } = true;
+    public bool EdgeEnabled { get; set; } = true;
+    public bool BraveEnabled { get; set; } = true;
+    public bool FirefoxEnabled { get; set; } = false;
+    public int ChromePort { get; set; } = 9222;
+    public int EdgePort { get; set; } = 9223;
+    public int BravePort { get; set; } = 9224;
+    public int FirefoxPort { get; set; } = 9225;
+    public string ChromeExtensionId { get; set; } = string.Empty;
+    public string EdgeExtensionId { get; set; } = string.Empty;
+    public string BraveExtensionId { get; set; } = string.Empty;
 }
 
 /// <summary>

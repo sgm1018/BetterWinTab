@@ -655,6 +655,8 @@ public sealed partial class MainPage : Page
             if (thumbHost.ActualWidth <= 0 || thumbHost.ActualHeight <= 0) continue;
 
             var sourceHwnd = ViewModel.Windows[i].Model.Handle;
+            if (ViewModel.Windows[i].Model.IsBrowserTab)
+                continue;
             touchedHandles.Add(sourceHwnd);
 
             // Re-use an existing registration if available (avoids the brief hide/show flash)

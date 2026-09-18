@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "BetterWinTab Chromium Bridge",
+  "version": "1.0.0",
+  "description": "Shares Chromium tabs with BetterWinTab through Native Messaging.",
+  "permissions": ["tabs", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "BetterWinTab"
+  }
+}

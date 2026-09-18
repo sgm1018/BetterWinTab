@@ -8,6 +8,7 @@ public partial class SettingsViewModel : BaseViewModel
 {
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
+    private readonly BrowserNativeHostInstaller _browserNativeHostInstaller = new();
 
     public SettingsViewModel(AppSettings settings, SettingsService settingsService)
     {
@@ -26,8 +27,50 @@ public partial class SettingsViewModel : BaseViewModel
 
     [ObservableProperty]
     private bool _settingsClipboardEnabled;
+    [ObservableProperty]
+    private bool _settingsBrowserTabsEnabled;
+    [ObservableProperty]
+    private bool _settingsChromeTabsEnabled;
+    [ObservableProperty]
+    private bool _settingsEdgeTabsEnabled;
+    [ObservableProperty]
+    private bool _settingsBraveTabsEnabled;
+    [ObservableProperty]
+    private bool _settingsFirefoxTabsEnabled;
+    [ObservableProperty]
+    private string _settingsChromePort = "9222";
+    [ObservableProperty]
+    private string _settingsEdgePort = "9223";
+    [ObservableProperty]
+    private string _settingsBravePort = "9224";
+    [ObservableProperty]
+    private string _settingsChromeExtensionId = string.Empty;
+    [ObservableProperty]
+    private string _settingsEdgeExtensionId = string.Empty;
+    [ObservableProperty]
+    private string _settingsBraveExtensionId = string.Empty;
+    [ObservableProperty]
+    private string _browserIntegrationStatusText = string.Empty;
+    public string BrowserTabsStatusText
+    {
+        get
+        {
+            var detected = new[] { "chrome", "msedge", "brave", "firefox" }
+                .Where(name => System.Diagnostics.Process.GetProcessesByName(name).Length > 0)
+                .Select(name => name switch
+                {
+                    "chrome" => "Chrome",
+                    "msedge" => "Edge",
+                    "brave" => "Brave",
+                    _ => "Firefox"
+                });
+            var browsers = string.Join(", ", detected);
+            return string.IsNullOrEmpty(browsers) ? "No supported browser detected" : $"Detected: {browsers}";
+        }
+    }
 
     public event Action? ClipboardEnabledChanged;
+    public event Action? BrowserTabsChanged;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HotkeyDisplayText))]
@@ -150,6 +193,19 @@ public partial class SettingsViewModel : BaseViewModel
         SettingsWindowHoverBackgroundColor = ThemeApplier.ResolveHoverFromAccent(a.WindowHoverBackgroundColor, a.AccentColor, 0x0C);
         SettingsRunAtStartup = _settingsService.GetRunAtStartup();
         SettingsClipboardEnabled = _settings.ClipboardHistoryEnabled;
+        SettingsBrowserTabsEnabled = _settings.BrowserTabs.Enabled;
+        SettingsChromeTabsEnabled = _settings.BrowserTabs.ChromeEnabled;
+        SettingsEdgeTabsEnabled = _settings.BrowserTabs.EdgeEnabled;
+        SettingsBraveTabsEnabled = _settings.BrowserTabs.BraveEnabled;
+        SettingsFirefoxTabsEnabled = _settings.BrowserTabs.FirefoxEnabled;
+        SettingsChromePort = _settings.BrowserTabs.ChromePort.ToString();
+        SettingsEdgePort = _settings.BrowserTabs.EdgePort.ToString();
+        SettingsBravePort = _settings.BrowserTabs.BravePort.ToString();
+        SettingsChromeExtensionId = _settings.BrowserTabs.ChromeExtensionId;
+        SettingsEdgeExtensionId = _settings.BrowserTabs.EdgeExtensionId;
+        SettingsBraveExtensionId = _settings.BrowserTabs.BraveExtensionId;
+        BrowserIntegrationStatusText = string.Empty;
+        OnPropertyChanged(nameof(BrowserTabsStatusText));
         ActiveSettingsTab = "General";
         IsSettingsPanelVisible = true;
     }
@@ -174,13 +230,44 @@ public partial class SettingsViewModel : BaseViewModel
         _settings.Appearance.WindowHoverBackgroundColor = SettingsWindowHoverBackgroundColor;
         _settings.RunAtStartup = SettingsRunAtStartup;
         _settingsService.SetRunAtStartup(SettingsRunAtStartup);
+        _settings.BrowserTabs.Enabled = SettingsBrowserTabsEnabled;
+        _settings.BrowserTabs.ChromeEnabled = SettingsChromeTabsEnabled;
+        _settings.BrowserTabs.EdgeEnabled = SettingsEdgeTabsEnabled;
+        _settings.BrowserTabs.BraveEnabled = SettingsBraveTabsEnabled;
+        _settings.BrowserTabs.FirefoxEnabled = SettingsFirefoxTabsEnabled;
+        _settings.BrowserTabs.ChromePort = ParsePort(SettingsChromePort, 9222);
+        _settings.BrowserTabs.EdgePort = ParsePort(SettingsEdgePort, 9223);
+        _settings.BrowserTabs.BravePort = ParsePort(SettingsBravePort, 9224);
+        _settings.BrowserTabs.ChromeExtensionId = SettingsChromeExtensionId.Trim();
+        _settings.BrowserTabs.EdgeExtensionId = SettingsEdgeExtensionId.Trim();
+        _settings.BrowserTabs.BraveExtensionId = SettingsBraveExtensionId.Trim();
         var clipboardChanged = _settings.ClipboardHistoryEnabled != SettingsClipboardEnabled;
         _settings.ClipboardHistoryEnabled = SettingsClipboardEnabled;
         SaveSettings();
         IsSettingsPanelVisible = false;
         AppearanceChanged?.Invoke();
         if (clipboardChanged) ClipboardEnabledChanged?.Invoke();
+        BrowserTabsChanged?.Invoke();
     }
+
+    [RelayCommand]
+    private void RegisterBrowserNativeHost()
+    {
+        var extensionIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Chrome"] = SettingsChromeExtensionId,
+            ["Edge"] = SettingsEdgeExtensionId,
+            ["Brave"] = SettingsBraveExtensionId
+        };
+
+        BrowserIntegrationStatusText = _browserNativeHostInstaller.Install(extensionIds);
+        _settings.BrowserTabs.ChromeExtensionId = SettingsChromeExtensionId.Trim();
+        _settings.BrowserTabs.EdgeExtensionId = SettingsEdgeExtensionId.Trim();
+        _settings.BrowserTabs.BraveExtensionId = SettingsBraveExtensionId.Trim();
+        SaveSettings();
+    }
+    private static int ParsePort(string value, int fallback) =>
+        int.TryParse(value, out var port) && port is >= 1 and <= 65535 ? port : fallback;
 
     [RelayCommand]
     public void CancelSettings()

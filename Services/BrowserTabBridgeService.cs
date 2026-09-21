@@ -163,8 +163,11 @@ public sealed class BrowserTabBridgeService : IDisposable
                 if (root.TryGetProperty("type", out var type) && type.GetString() == "tabs")
                 {
                     var tabs = ParseTabs(root, browser);
+                    var changed = !_tabs.TryGetValue(browser, out var previousTabs)
+                        || !previousTabs.SequenceEqual(tabs);
                     _tabs[browser] = tabs;
-                    TabsChanged?.Invoke();
+                    if (changed)
+                        TabsChanged?.Invoke();
                     StatusChanged?.Invoke();
                 }
             }

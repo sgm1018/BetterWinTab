@@ -62,6 +62,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Search icon -->
@@ -102,12 +103,20 @@
                     Foreground="{StaticResource TextPrimaryBrush}"
                     PlaceholderForeground="{StaticResource TextMutedBrush}"
                     FontSize="{StaticResource FontSizeMedium}"
+                    IsEnabled="{x:Bind ViewModel.IsSemanticSearchReady, Mode=OneWay}"
                     VerticalAlignment="Center"
                     IsTabStop="True" />
 
+                <TextBlock
+                    Grid.Column="3"
+                    Text="{x:Bind ViewModel.SemanticEmbeddingsStatus, Mode=OneWay}"
+                    Foreground="{StaticResource TextMutedBrush}"
+                    FontSize="{StaticResource FontSizeSmall}"
+                    VerticalAlignment="Center" />
+
                 <!-- Result count badge -->
                 <Border
-                    Grid.Column="3"
+                    Grid.Column="4"
                     Visibility="{x:Bind ViewModel.SearchClearVisibility, Mode=OneWay}"
                     Background="#1A39FF14"
                     BorderBrush="{StaticResource NeonGreenSubtleBrush}"
@@ -123,7 +132,7 @@
 
                 <!-- Clear button -->
                 <Button
-                    Grid.Column="4"
+                    Grid.Column="5"
                     Visibility="{x:Bind ViewModel.SearchClearVisibility, Mode=OneWay}"
                     Command="{x:Bind ViewModel.ClearSearchCommand}"
                     Background="Transparent"

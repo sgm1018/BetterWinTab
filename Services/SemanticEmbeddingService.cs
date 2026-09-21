@@ -23,6 +23,9 @@ public sealed class SemanticEmbeddingService : IAsyncDisposable
     public async Task<float[]> EmbedPassageAsync(string text, CancellationToken cancellationToken = default)
         => await EmbedAsync("passage: " + text, cancellationToken);
 
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+        => EnsureInitializedAsync(cancellationToken);
+
     private async Task<float[]> EmbedAsync(string text, CancellationToken cancellationToken)
     {
         await EnsureInitializedAsync(cancellationToken);

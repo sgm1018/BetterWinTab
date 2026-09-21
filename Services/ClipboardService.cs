@@ -123,7 +123,8 @@ public class ClipboardService : IDisposable
     {
         try
         {
-            if (IsClipboardFormatAvailable(CF_UNICODETEXT))
+            var hasImage = IsClipboardFormatAvailable(CF_BITMAP) || IsClipboardFormatAvailable(CF_DIB);
+            if (!hasImage && IsClipboardFormatAvailable(CF_UNICODETEXT))
             {
                 if (OpenClipboard(IntPtr.Zero))
                 {
@@ -172,7 +173,7 @@ public class ClipboardService : IDisposable
                     }
                 }
             }
-            else if (IsClipboardFormatAvailable(CF_BITMAP) || IsClipboardFormatAvailable(CF_DIB))
+            else if (hasImage)
             {
                 // Debounce rapid duplicate image messages (some apps fire
                 // WM_CLIPBOARDUPDATE multiple times for a single copy)
@@ -229,10 +230,10 @@ public class ClipboardService : IDisposable
     /// <summary>
     /// Copies a history item back to the clipboard.
     /// </summary>
-    public bool CopyToClipboard(ClipboardItem item)
+    public async Task<bool> CopyToClipboardAsync(ClipboardItem item)
     {
         if (item.IsImage)
-            return CopyImageToClipboard(item.ImageData);
+            return await CopyImageToClipboardAsync(item.ImageData);
 
         if (string.IsNullOrEmpty(item.Text))
             return false;
@@ -240,20 +241,22 @@ public class ClipboardService : IDisposable
         return CopyTextToClipboard(item.Text);
     }
 
-    private bool CopyImageToClipboard(byte[]? imageData)
+    private async Task<bool> CopyImageToClipboardAsync(byte[]? imageData)
     {
         if (imageData is not { Length: > 0 })
             return false;
 
         _selfCopying = true;
+        InMemoryRandomAccessStream? stream = null;
         try
         {
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+            stream = new InMemoryRandomAccessStream();
+            using (var outputStream = stream.GetOutputStreamAt(0))
+            using (var writer = new DataWriter(outputStream))
             {
                 writer.WriteBytes(imageData);
-                writer.StoreAsync().AsTask().GetAwaiter().GetResult();
-                writer.DetachStream();
+                await writer.StoreAsync();
+                await outputStream.FlushAsync();
             }
 
             stream.Seek(0);
@@ -261,6 +264,7 @@ public class ClipboardService : IDisposable
             package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
             Clipboard.SetContent(package);
             Clipboard.Flush();
+            stream = null;
             return true;
         }
         catch
@@ -269,6 +273,7 @@ public class ClipboardService : IDisposable
         }
         finally
         {
+            stream?.Dispose();
             ResetSelfCopying();
         }
     }

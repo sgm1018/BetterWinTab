@@ -185,6 +185,7 @@ public sealed partial class MainPage : Page
     {
         // Apply saved appearance settings on startup
         ApplyAppearanceFromSettings();
+        _ = ViewModel.InitializeSemanticEmbeddingsAsync();
         // Provide the overlay HWND so VirtualDesktopService can determine current virtual desktop
         ViewModel.SetOverlayHwnd(App.Current.Hwnd);
 
@@ -954,12 +955,26 @@ public sealed partial class MainPage : Page
 
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
 
+        if (!ViewModel.IsSemanticSearchReady &&
+            (IsTypableKey(e.Key) || e.Key == Windows.System.VirtualKey.Back))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // ── Ctrl+C copies the selected clipboard item when clipboard is visible ──
         var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
         bool ctrlDown = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
         if (ctrlDown && e.Key == Windows.System.VirtualKey.C && ViewModel.IsClipboardFolderSelected)
         {
             ViewModel.CopySelectedClipboardItem();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Windows.System.VirtualKey.Back && !searchBoxFocused && ViewModel.IsSearchActive)
+        {
+            ViewModel.SearchQuery = ViewModel.SearchQuery[..^1];
             e.Handled = true;
             return;
         }

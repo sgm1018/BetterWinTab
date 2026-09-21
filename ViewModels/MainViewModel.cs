@@ -24,6 +24,7 @@ public partial class MainViewModel : BaseViewModel
     private readonly SemanticEmbeddingService _semanticEmbeddingService;
     private readonly SemanticSearchService _semanticSearchService;
     private readonly Dictionary<string, float[]> _semanticEmbeddingCache = new(StringComparer.Ordinal);
+    private readonly object _semanticSearchSync = new();
     private CancellationTokenSource? _semanticSearchCancellation;
     private int _semanticSearchGeneration;
     private readonly HashSet<IntPtr> _sessionPinnedHandles = new();
@@ -117,6 +118,15 @@ public partial class MainViewModel : BaseViewModel
 
     [ObservableProperty]
     private string _updateStatusMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSemanticSearchReady))]
+    private bool _semanticEmbeddingsLoading = true;
+
+    [ObservableProperty]
+    private string _semanticEmbeddingsStatus = "Loading embeddings...";
+
+    public bool IsSemanticSearchReady => !SemanticEmbeddingsLoading;
 
     /// <summary>True while no download is in progress — drives the button's IsEnabled.</summary>
     public bool CanInstallUpdate => IsUpdateAvailable && !IsDownloadingUpdate;
@@ -420,7 +430,7 @@ public partial class MainViewModel : BaseViewModel
         Settings.AppearanceChanged += () => AppearanceChanged?.Invoke();
         Settings.ClipboardEnabledChanged += OnClipboardEnabledChanged;
         Settings.BrowserTabsChanged += RefreshWindows;
-        _browserTabBridgeService.TabsChanged += RefreshWindows;
+        _browserTabBridgeService.TabsChanged += OnBrowserTabsChanged;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
 
         Title = "BetterWinTab";
@@ -468,6 +478,37 @@ public partial class MainViewModel : BaseViewModel
                 IsUpdateAvailable = _updateService.IsUpdateAvailable;
             });
         _ = _updateService.CheckAsync();
+    }
+
+    public async Task InitializeSemanticEmbeddingsAsync()
+    {
+        if (!SemanticEmbeddingsLoading)
+            return;
+
+        try
+        {
+            await _semanticEmbeddingService.InitializeAsync();
+            RefreshWindows();
+            foreach (var window in _cachedFolderWindows.ToList())
+            {
+                var id = GetSemanticId(window);
+                if (!_semanticEmbeddingCache.ContainsKey(id))
+                {
+                    _semanticEmbeddingCache[id] = await _semanticEmbeddingService.EmbedPassageAsync(
+                        GetSemanticText(window));
+                }
+            }
+            SemanticEmbeddingsStatus = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            SemanticEmbeddingsStatus = "Embeddings unavailable; using text search";
+            System.Diagnostics.Debug.WriteLine($"Semantic embeddings unavailable: {ex.Message}");
+        }
+        finally
+        {
+            SemanticEmbeddingsLoading = false;
+        }
     }
 
     partial void OnSelectedFolderChanged(FolderItemViewModel? value)
@@ -687,31 +728,48 @@ public partial class MainViewModel : BaseViewModel
         // Notify listeners (View) to re-register DWM thumbnails
         WindowsRefreshed?.Invoke();
 
-        StartSemanticSearch(q);
+        StartSemanticSearch(q, source);
     }
 
-    private void StartSemanticSearch(string query)
+    private void StartSemanticSearch(string query, IReadOnlyList<WindowInfo> candidates)
     {
-        _semanticSearchCancellation?.Cancel();
-        _semanticSearchCancellation?.Dispose();
+        CancellationTokenSource? previousCancellation;
+        lock (_semanticSearchSync)
+        {
+            previousCancellation = _semanticSearchCancellation;
+            _semanticSearchCancellation = null;
+            previousCancellation?.Cancel();
+            previousCancellation?.Dispose();
+        }
 
-        if (string.IsNullOrEmpty(query) || _cachedFolderWindows.Count == 0)
+        if (string.IsNullOrEmpty(query) || candidates.Count == 0 ||
+            SemanticEmbeddingsLoading || SemanticEmbeddingsStatus.Length > 0)
             return;
 
         var cancellation = new CancellationTokenSource();
-        _semanticSearchCancellation = cancellation;
+        lock (_semanticSearchSync)
+            _semanticSearchCancellation = cancellation;
         var generation = ++_semanticSearchGeneration;
-        _ = ApplySemanticSearchAsync(query, generation, cancellation.Token);
+        _ = ApplySemanticSearchAsync(query, candidates.ToList(), generation, cancellation.Token);
     }
 
-    private async Task ApplySemanticSearchAsync(string query, int generation, CancellationToken cancellationToken)
+    private void OnBrowserTabsChanged()
+    {
+        _dispatcherQueue?.TryEnqueue(RefreshWindows);
+    }
+
+    private async Task ApplySemanticSearchAsync(
+        string query,
+        IReadOnlyList<WindowInfo> candidates,
+        int generation,
+        CancellationToken cancellationToken)
     {
         try
         {
             var queryEmbedding = await _semanticEmbeddingService.EmbedQueryAsync(query, cancellationToken);
             var records = new List<(SemanticSearchRecord Record, float[] Embedding)>();
 
-            foreach (var window in _cachedFolderWindows)
+            foreach (var window in candidates)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var id = GetSemanticId(window);
@@ -738,7 +796,7 @@ public partial class MainViewModel : BaseViewModel
                 if (generation != _semanticSearchGeneration || cancellationToken.IsCancellationRequested)
                     return;
 
-                var windowsById = _cachedFolderWindows.ToDictionary(GetSemanticId, StringComparer.Ordinal);
+                var windowsById = candidates.ToDictionary(GetSemanticId, StringComparer.Ordinal);
                 var ranked = rankedIds
                     .Where(windowsById.ContainsKey)
                     .Select(id => windowsById[id])
@@ -1056,10 +1114,10 @@ public partial class MainViewModel : BaseViewModel
 
     /// <summary>Copies the given item to the system clipboard.</summary>
     [RelayCommand]
-    public void CopyClipboardItem(ClipboardItem item)
+    public async Task CopyClipboardItem(ClipboardItem item)
     {
         if (item == null) return;
-        _clipboardService.CopyToClipboard(item);
+        await _clipboardService.CopyToClipboardAsync(item);
     }
 
     /// <summary>
@@ -1088,14 +1146,12 @@ public partial class MainViewModel : BaseViewModel
     /// Copies the currently selected clipboard item and shows a success toast.
     /// Called by Enter, Ctrl+C, and click events.
     /// </summary>
-    public void CopySelectedClipboardItem()
+    public async void CopySelectedClipboardItem()
     {
         if (SelectedClipboardItem == null) return;
-        _clipboardService.CopyToClipboard(SelectedClipboardItem);
+        await _clipboardService.CopyToClipboardAsync(SelectedClipboardItem);
         ShowClipboardCopiedToast();
     }
-
-    /// <summary>
     /// Shows the "elemento copiado con éxito" toast for 2.5 seconds.
     /// </summary>
     private void ShowClipboardCopiedToast()

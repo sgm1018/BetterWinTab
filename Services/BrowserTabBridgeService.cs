@@ -153,7 +153,7 @@ public sealed class BrowserTabBridgeService : IDisposable
                 using var document = JsonDocument.Parse(line);
                 var root = document.RootElement;
                 var browser = root.TryGetProperty("browser", out var browserValue)
-                    ? browserValue.GetString() ?? string.Empty
+                    ? NormalizeBrowserName(browserValue.GetString())
                     : string.Empty;
                 if (string.IsNullOrWhiteSpace(browser)) continue;
 
@@ -237,6 +237,15 @@ public sealed class BrowserTabBridgeService : IDisposable
         "Brave" => "brave",
         _ => "chrome"
     };
+
+    private static string NormalizeBrowserName(string? browser) =>
+        browser?.Trim().ToLowerInvariant() switch
+        {
+            var value when value is not null && value.Contains("edge") => "Edge",
+            var value when value is not null && value.Contains("brave") => "Brave",
+            var value when value is not null && value.Contains("chrome") => "Chrome",
+            _ => string.Empty
+        };
 
     private static string ReadString(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) ? value.GetString() ?? string.Empty : string.Empty;

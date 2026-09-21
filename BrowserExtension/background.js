@@ -85,6 +85,15 @@ function schedulePublish() {
   pendingTabsTimer = setTimeout(publishTabs, 80);
 }
 
+setInterval(() => {
+  if (!port) {
+    connect();
+    return;
+  }
+
+  publishTabs();
+}, 5000);
+
 function handleNativeMessage(message) {
   if (!message || message.type !== "activate") return;
   const tabId = Number(message.tabId);

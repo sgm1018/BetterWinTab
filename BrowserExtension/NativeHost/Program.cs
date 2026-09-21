@@ -7,16 +7,7 @@ using System.Text.Json.Nodes;
 
 const string pipeName = "BetterWinTab.BrowserTabs";
 var parentProcessId = GetParentProcessId();
-
-using var appPipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-try
-{
-    await appPipe.ConnectAsync(5000);
-}
-catch
-{
-    return 1;
-}
+using var appPipe = await ConnectToAppPipeAsync(pipeName);
 
 using var appReader = new StreamReader(appPipe, Encoding.UTF8, leaveOpen: true);
 using var appWriter = new StreamWriter(appPipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
@@ -63,6 +54,24 @@ static async Task<string?> ReadNativeMessageAsync(Stream input)
     var payload = new byte[length];
     if (!await ReadExactlyAsync(input, payload)) return null;
     return Encoding.UTF8.GetString(payload);
+}
+
+static async Task<NamedPipeClientStream> ConnectToAppPipeAsync(string pipeName)
+{
+    while (true)
+    {
+        var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        try
+        {
+            await pipe.ConnectAsync(5000);
+            return pipe;
+        }
+        catch
+        {
+            pipe.Dispose();
+            await Task.Delay(1000);
+        }
+    }
 }
 
 static async Task WriteNativeMessageAsync(Stream output, string message)

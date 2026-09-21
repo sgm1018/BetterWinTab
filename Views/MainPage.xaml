@@ -577,14 +577,14 @@
                                             Margin="8"
                                             Padding="6,2"
                                             CornerRadius="3"
-                                            Background="#CC0D3D06"
-                                            BorderBrush="{StaticResource NeonGreenDimBrush}"
+                                            Background="{x:Bind TypeChipBackgroundBrush}"
+                                            BorderBrush="{x:Bind TypeAccentDimBrush}"
                                             BorderThickness="1"
                                             Visibility="Visible">
                                         <TextBlock Text="{x:Bind ItemTypeLabel}"
                                                    FontSize="9"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource NeonGreenBrush}" />
+                                                   Foreground="{x:Bind TypeAccentBrush}" />
                                     </Border>
 
                                 <!-- Desktop badge — visible in title strip when window is on another desktop) -->
@@ -1031,10 +1031,20 @@
                     Visibility="{x:Bind ViewModel.ShowEmptyDefault, Mode=OneWay}"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center">
-                    <FontIcon
-                        Glyph="&#xE7B8;"
-                        FontSize="52"
-                        Foreground="{StaticResource NeonGreenDimBrush}" />
+                    <Border
+                        Background="#080D0A"
+                        BorderBrush="{StaticResource NeonGreenSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="22,16"
+                        HorizontalAlignment="Center">
+                        <TextBlock
+                            FontFamily="Consolas"
+                            FontSize="15"
+                            Foreground="{StaticResource NeonGreenDimBrush}"
+                            TextAlignment="Center"
+                            Text="+----------------+&#xA;|   [  ]         |&#xA;|  /____\   ...   |&#xA;|  NO WINDOWS    |&#xA;+----------------+" />
+                    </Border>
                     <TextBlock
                         Text="No windows found"
                         FontSize="{StaticResource FontSizeLarge}"
@@ -1131,11 +1141,19 @@
                                     </Grid>
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                        <TextBlock
-                                            Text="{x:Bind ItemTypeLabel}"
-                                            Foreground="{StaticResource NeonGreenDimBrush}"
-                                            FontSize="10"
-                                            FontWeight="SemiBold" />
+                                        <Border
+                                            Background="{StaticResource AppPurpleSubtleBrush}"
+                                            BorderBrush="{StaticResource AppPurpleDimBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="3"
+                                            Padding="5,1"
+                                            HorizontalAlignment="Left">
+                                            <TextBlock
+                                                Text="{x:Bind ItemTypeLabel}"
+                                                Foreground="{StaticResource AppPurpleBrush}"
+                                                FontSize="9"
+                                                FontWeight="SemiBold" />
+                                        </Border>
                                         <TextBlock
                                             Text="{x:Bind Name}"
                                             Foreground="{StaticResource TextPrimaryBrush}"

@@ -1,5 +1,7 @@
 using BetterWinTab.Models;
 using BetterWinTab.Services;
+using Microsoft.UI;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace BetterWinTab.ViewModels;
@@ -56,6 +58,15 @@ public partial class WindowItemViewModel : BaseViewModel
     public bool IsBrowserTab => Model.IsBrowserTab;
     public string ItemTypeLabel => Model.IsBrowserTab ? "TAB" : "WINDOW";
     public string SourceLabel => Model.IsBrowserTab ? $"{Model.BrowserName} · tab" : ProcessName;
+    public Brush TypeAccentBrush => Model.IsBrowserTab
+        ? new SolidColorBrush(ColorHelper.FromArgb(255, 53, 201, 255))
+        : new SolidColorBrush(ColorHelper.FromArgb(255, 57, 255, 20));
+    public Brush TypeAccentDimBrush => Model.IsBrowserTab
+        ? new SolidColorBrush(ColorHelper.FromArgb(255, 23, 101, 127))
+        : new SolidColorBrush(ColorHelper.FromArgb(255, 26, 138, 10));
+    public Brush TypeChipBackgroundBrush => Model.IsBrowserTab
+        ? new SolidColorBrush(ColorHelper.FromArgb(204, 9, 43, 54))
+        : new SolidColorBrush(ColorHelper.FromArgb(204, 13, 61, 6));
     public string BrowserBadge => Model.IsBrowserTab ? "TAB" : string.Empty;
     public string BrowserIconGlyph => Model.BrowserName switch
     {

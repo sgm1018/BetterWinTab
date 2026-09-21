@@ -21,6 +21,12 @@
             <Color x:Key="NeonGreen">#39FF14</Color>
             <Color x:Key="NeonGreenDim">#1A8A0A</Color>
             <Color x:Key="NeonGreenSubtle">#0D3D06</Color>
+            <Color x:Key="TabBlue">#35C9FF</Color>
+            <Color x:Key="TabBlueDim">#17657F</Color>
+            <Color x:Key="TabBlueSubtle">#092B36</Color>
+            <Color x:Key="AppPurple">#C084FC</Color>
+            <Color x:Key="AppPurpleDim">#69458A</Color>
+            <Color x:Key="AppPurpleSubtle">#2B1D3A</Color>
             <Color x:Key="PureBlack">#000000</Color>
             <Color x:Key="DarkSurface">#0A0A0A</Color>
             <Color x:Key="CardSurface">#111111</Color>
@@ -35,6 +41,12 @@
             <SolidColorBrush x:Key="NeonGreenBrush" Color="{StaticResource NeonGreen}" />
             <SolidColorBrush x:Key="NeonGreenDimBrush" Color="{StaticResource NeonGreenDim}" />
             <SolidColorBrush x:Key="NeonGreenSubtleBrush" Color="{StaticResource NeonGreenSubtle}" />
+            <SolidColorBrush x:Key="TabBlueBrush" Color="{StaticResource TabBlue}" />
+            <SolidColorBrush x:Key="TabBlueDimBrush" Color="{StaticResource TabBlueDim}" />
+            <SolidColorBrush x:Key="TabBlueSubtleBrush" Color="{StaticResource TabBlueSubtle}" />
+            <SolidColorBrush x:Key="AppPurpleBrush" Color="{StaticResource AppPurple}" />
+            <SolidColorBrush x:Key="AppPurpleDimBrush" Color="{StaticResource AppPurpleDim}" />
+            <SolidColorBrush x:Key="AppPurpleSubtleBrush" Color="{StaticResource AppPurpleSubtle}" />
             <SolidColorBrush x:Key="PureBlackBrush" Color="{StaticResource PureBlack}" />
             <SolidColorBrush x:Key="DarkSurfaceBrush" Color="{StaticResource DarkSurface}" />
             <SolidColorBrush x:Key="CardSurfaceBrush" Color="{StaticResource CardSurface}" />

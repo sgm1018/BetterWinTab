@@ -19,6 +19,22 @@ public sealed class BrowserTabBridgeService : IDisposable
     private readonly ConcurrentDictionary<string, List<BridgeTab>> _tabs = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? TabsChanged;
+    public event Action? StatusChanged;
+
+    public string GetHealthSummary()
+    {
+        var supported = new[] { "Chrome", "Edge", "Brave" };
+        var states = supported.Select(browser =>
+        {
+            if (!_connections.ContainsKey(browser))
+                return $"{browser}: not connected";
+
+            var count = _tabs.TryGetValue(browser, out var tabs) ? tabs.Count : 0;
+            return $"{browser}: connected ({count} tabs)";
+        });
+
+        return string.Join(" · ", states);
+    }
 
     public BrowserTabBridgeService(WindowEnumerationService windowService)
     {
@@ -149,6 +165,7 @@ public sealed class BrowserTabBridgeService : IDisposable
                     var tabs = ParseTabs(root, browser);
                     _tabs[browser] = tabs;
                     TabsChanged?.Invoke();
+                    StatusChanged?.Invoke();
                 }
             }
         }
@@ -164,7 +181,11 @@ public sealed class BrowserTabBridgeService : IDisposable
             if (connection != null)
             {
                 foreach (var pair in _connections.Where(pair => ReferenceEquals(pair.Value, connection)).ToList())
+                {
                     _connections.TryRemove(pair.Key, out _);
+                    _tabs.TryRemove(pair.Key, out _);
+                    StatusChanged?.Invoke();
+                }
             }
         }
         }

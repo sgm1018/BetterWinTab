@@ -416,7 +416,7 @@ public partial class MainViewModel : BaseViewModel
         _semanticSearchService = ServiceContainer.Resolve<SemanticSearchService>();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _updateService = ServiceContainer.Resolve<UpdateService>();
-        Settings = new SettingsViewModel(_settings, _settingsService);
+        Settings = new SettingsViewModel(_settings, _settingsService, _browserTabBridgeService);
         Settings.AppearanceChanged += () => AppearanceChanged?.Invoke();
         Settings.ClipboardEnabledChanged += OnClipboardEnabledChanged;
         Settings.BrowserTabsChanged += RefreshWindows;

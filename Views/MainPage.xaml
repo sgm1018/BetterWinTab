@@ -571,8 +571,8 @@
                                             Background="#CC0D3D06"
                                             BorderBrush="{StaticResource NeonGreenDimBrush}"
                                             BorderThickness="1"
-                                            Visibility="{x:Bind IsBrowserTab, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock Text="TAB"
+                                            Visibility="Visible">
+                                        <TextBlock Text="{x:Bind ItemTypeLabel}"
                                                    FontSize="9"
                                                    FontWeight="SemiBold"
                                                    Foreground="{StaticResource NeonGreenBrush}" />
@@ -1122,6 +1122,11 @@
                                     </Grid>
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock
+                                            Text="{x:Bind ItemTypeLabel}"
+                                            Foreground="{StaticResource NeonGreenDimBrush}"
+                                            FontSize="10"
+                                            FontWeight="SemiBold" />
                                         <TextBlock
                                             Text="{x:Bind Name}"
                                             Foreground="{StaticResource TextPrimaryBrush}"

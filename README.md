@@ -84,6 +84,12 @@ Search is always ready. Type part of a title, app name, subtitle, or process nam
 
 The matcher is typo-tolerant and built for fast, imperfect typing under pressure.
 
+When the local semantic model is available, BetterWinTab also performs an asynchronous
+hybrid rerank using `intfloat/multilingual-e5-small`. Lexical results appear first, so
+the model never blocks typing. The ONNX model and SentencePiece tokenizer are downloaded
+on demand from Hugging Face and cached under `%LocalAppData%\BetterWinTab\Models`.
+Window, tab, and clipboard content embeddings remain in memory for the current process.
+
 ### App Launcher
 
 If no open window matches your search, BetterWinTab becomes an application launcher. Find installed programs and open them with one keystroke.
@@ -169,11 +175,17 @@ provides one. Chromium's normal extension API does not provide screenshots of
 all background tabs; a live tab image is only available for the currently
 visible tab with additional capture permissions.
 
+Settings also reports the Native Messaging bridge state for Chrome, Edge, and Brave,
+including whether each browser is connected and how many tabs were last received.
+Cards label native windows as `WINDOW`, browser tabs as `TAB`, and launchable apps as `APP`.
+
 Firefox is detected in Settings, but its extension bridge is not included yet.
 
 ### Clipboard History
 
-BetterWinTab includes a focused clipboard panel for recent text items. It is built to open quickly, stay clean, and work from the keyboard.
+BetterWinTab includes a focused clipboard panel for recent text and image items. Entries,
+pins, and image bytes are session-only and are cleared when BetterWinTab restarts.
+Selecting an entry copies it back to the system clipboard, including captured images.
 
 <img width="2554" height="1070" alt="Captura de pantalla 2026-04-29 025645" src="https://github.com/user-attachments/assets/1697cb59-17ac-49ac-8701-df1290018fe2" />
 

@@ -16,6 +16,7 @@ public partial class LaunchItemViewModel : ObservableObject
     public LaunchItem Model { get; }
 
     public string Name => Model.Name;
+    public string ItemTypeLabel => "APP";
 
     /// <summary>
     /// Short friendly path shown under the app name.

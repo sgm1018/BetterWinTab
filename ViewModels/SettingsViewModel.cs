@@ -8,12 +8,18 @@ public partial class SettingsViewModel : BaseViewModel
 {
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
+    private readonly BrowserTabBridgeService? _browserTabBridgeService;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcherQueue;
     private readonly BrowserNativeHostInstaller _browserNativeHostInstaller = new();
 
-    public SettingsViewModel(AppSettings settings, SettingsService settingsService)
+    public SettingsViewModel(AppSettings settings, SettingsService settingsService, BrowserTabBridgeService? browserTabBridgeService = null)
     {
         _settings = settings;
         _settingsService = settingsService;
+        _browserTabBridgeService = browserTabBridgeService;
+        _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        if (_browserTabBridgeService != null)
+            _browserTabBridgeService.StatusChanged += OnBrowserBridgeStatusChanged;
 
         foreach (var p in _settings.CustomPresets)
             CustomPresets.Add(p);
@@ -65,8 +71,15 @@ public partial class SettingsViewModel : BaseViewModel
                     _ => "Firefox"
                 });
             var browsers = string.Join(", ", detected);
-            return string.IsNullOrEmpty(browsers) ? "No supported browser detected" : $"Detected: {browsers}";
+            var detectedText = string.IsNullOrEmpty(browsers) ? "No supported browser detected" : $"Detected: {browsers}";
+            var bridgeText = _browserTabBridgeService?.GetHealthSummary();
+            return string.IsNullOrWhiteSpace(bridgeText) ? detectedText : $"{detectedText}\n{bridgeText}";
         }
+    }
+
+    private void OnBrowserBridgeStatusChanged()
+    {
+        _dispatcherQueue?.TryEnqueue(() => OnPropertyChanged(nameof(BrowserTabsStatusText)));
     }
 
     public event Action? ClipboardEnabledChanged;

@@ -54,6 +54,7 @@ public partial class WindowItemViewModel : BaseViewModel
     /// </summary>
     public string TitlePrefix { get; }
     public bool IsBrowserTab => Model.IsBrowserTab;
+    public string ItemTypeLabel => Model.IsBrowserTab ? "TAB" : "WINDOW";
     public string SourceLabel => Model.IsBrowserTab ? $"{Model.BrowserName} · tab" : ProcessName;
     public string BrowserBadge => Model.IsBrowserTab ? "TAB" : string.Empty;
     public string BrowserIconGlyph => Model.BrowserName switch

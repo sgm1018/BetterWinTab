@@ -22,6 +22,12 @@ var sendToBrowser = Task.Run(async () =>
     }
 });
 
+_ = sendToBrowser.ContinueWith(
+    _ => Environment.Exit(0),
+    CancellationToken.None,
+    TaskContinuationOptions.ExecuteSynchronously,
+    TaskScheduler.Default);
+
 while (true)
 {
     var message = await ReadNativeMessageAsync(Console.OpenStandardInput());

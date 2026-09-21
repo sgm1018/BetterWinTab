@@ -95,6 +95,11 @@ setInterval(() => {
 }, 5000);
 
 function handleNativeMessage(message) {
+  if (message && message.type === "refresh") {
+    publishTabs();
+    return;
+  }
+
   if (!message || message.type !== "activate") return;
   const tabId = Number(message.tabId);
   if (!Number.isInteger(tabId)) return;

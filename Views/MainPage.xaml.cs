@@ -232,6 +232,7 @@ public sealed partial class MainPage : Page
     {
         // Clear any leftover search from last session
         ViewModel.ClearSearch();
+        ViewModel.RequestBrowserTabsRefresh();
         ViewModel.RefreshWindows();
 
         // Immediate focus attempt

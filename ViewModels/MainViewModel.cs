@@ -641,6 +641,8 @@ public partial class MainViewModel : BaseViewModel
         ApplySearchFilter();
     }
 
+    public void RequestBrowserTabsRefresh() => _browserTabBridgeService.RequestTabsRefresh();
+
     /// <summary>
     /// Filters the Windows collection from the folder cache using the current SearchQuery.
     /// Uses fuzzy matching with fallback to exact substring for typo tolerance.

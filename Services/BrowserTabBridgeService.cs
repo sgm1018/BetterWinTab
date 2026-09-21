@@ -100,6 +100,12 @@ public sealed class BrowserTabBridgeService : IDisposable
         });
     }
 
+    public void RequestTabsRefresh()
+    {
+        foreach (var connection in _connections.Values.Distinct())
+            connection.Send(new { type = "refresh" });
+    }
+
     public void Dispose()
     {
         _shutdown.Cancel();

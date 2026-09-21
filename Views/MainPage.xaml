@@ -1043,7 +1043,7 @@
                             FontSize="15"
                             Foreground="{StaticResource NeonGreenDimBrush}"
                             TextAlignment="Center"
-                            Text="+----------------+&#xA;|   [  ]         |&#xA;|  /____\   ...   |&#xA;|  NO WINDOWS    |&#xA;+----------------+" />
+                            Text="+----------------+&#xA;|     [  ]       |&#xA;|   /------\      |&#xA;|  |        | ... |&#xA;|  |________|     |&#xA;+----------------+" />
                     </Border>
                     <TextBlock
                         Text="No windows found"

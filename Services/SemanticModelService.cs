@@ -5,7 +5,7 @@ public sealed class SemanticModelService
     public const string ModelName = "multilingual-e5-small";
 
     private const string ModelUrl = "https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/onnx/model.onnx";
-    private const string TokenizerUrl = "https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/tokenizer.json";
+    private const string TokenizerUrl = "https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/sentencepiece.bpe.model";
 
     private readonly HttpClient _httpClient;
     private readonly SemaphoreSlim _downloadLock = new(1, 1);
@@ -23,7 +23,7 @@ public sealed class SemanticModelService
 
     public string ModelDirectory => _modelDirectory;
     public string ModelPath => Path.Combine(_modelDirectory, "model.onnx");
-    public string TokenizerPath => Path.Combine(_modelDirectory, "tokenizer.json");
+    public string TokenizerPath => Path.Combine(_modelDirectory, "sentencepiece.bpe.model");
     public bool IsAvailable => File.Exists(ModelPath) && File.Exists(TokenizerPath);
 
     public async Task<string> EnsureModelAsync(CancellationToken cancellationToken = default)

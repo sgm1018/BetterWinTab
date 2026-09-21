@@ -11,7 +11,9 @@ if ($invalidIds) {
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $hostProject = Join-Path $root 'NativeHost\BetterWinTab.NativeHost.csproj'
 $hostOutput = Join-Path $root 'NativeHost\bin\Release\net8.0\BetterWinTab.NativeHost.exe'
-$manifestPath = Join-Path $root 'com.betterwintab.tabs.json'
+$installRoot = Join-Path $env:LOCALAPPDATA 'BetterWinTab\NativeHost'
+$installedHost = Join-Path $installRoot 'BetterWinTab.NativeHost.exe'
+$manifestPath = Join-Path $installRoot 'com.betterwintab.tabs.json'
 $registryPaths = @(
     'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.betterwintab.tabs',
     'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.betterwintab.tabs',
@@ -22,10 +24,14 @@ if (-not (Test-Path $hostOutput)) {
     dotnet build $hostProject -c Release
 }
 
+New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+Get-Process BetterWinTab.NativeHost -ErrorAction SilentlyContinue | Stop-Process -Force
+Copy-Item $hostOutput $installedHost -Force
+
 $manifest = [ordered]@{
     name = 'com.betterwintab.tabs'
     description = 'BetterWinTab Chromium tab bridge'
-    path = $hostOutput
+    path = $installedHost
     type = 'stdio'
     allowed_origins = @($ExtensionId | ForEach-Object { "chrome-extension://$_/" })
 }

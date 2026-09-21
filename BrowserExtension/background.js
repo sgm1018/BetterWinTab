@@ -1,4 +1,6 @@
 const HOST_NAME = "com.betterwintab.tabs";
+const POLL_ALARM = "betterwintab-poll";
+const RECONNECT_ALARM = "betterwintab-reconnect";
 let port;
 let reconnectTimer;
 let pendingTabsTimer;
@@ -21,12 +23,14 @@ function connect() {
       port = undefined;
       clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connect, 3000);
+      chrome.alarms.create(RECONNECT_ALARM, { when: Date.now() + 3000 });
     });
     sendHello();
   } catch {
     port = undefined;
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(connect, 3000);
+    chrome.alarms.create(RECONNECT_ALARM, { when: Date.now() + 3000 });
   }
 }
 
@@ -85,14 +89,24 @@ function schedulePublish() {
   pendingTabsTimer = setTimeout(publishTabs, 80);
 }
 
-setInterval(() => {
+async function reconnectAndPublish() {
   if (!port) {
     connect();
     return;
   }
 
-  publishTabs();
-}, 5000);
+  await publishTabs();
+}
+
+chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === POLL_ALARM || alarm.name === RECONNECT_ALARM) {
+    reconnectAndPublish();
+  }
+});
+
+chrome.runtime.onStartup.addListener(connect);
+chrome.runtime.onInstalled.addListener(connect);
 
 function handleNativeMessage(message) {
   if (message && message.type === "refresh") {

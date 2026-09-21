@@ -3,7 +3,7 @@
   "name": "BetterWinTab Chromium Bridge",
   "version": "1.0.0",
   "description": "Shares Chromium tabs with BetterWinTab through Native Messaging.",
-  "permissions": ["tabs", "nativeMessaging"],
+  "permissions": ["tabs", "nativeMessaging", "alarms"],
   "background": {
     "service_worker": "background.js"
   },

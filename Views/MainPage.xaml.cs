@@ -234,6 +234,10 @@ public sealed partial class MainPage : Page
         ViewModel.ClearSearch();
         ViewModel.RequestBrowserTabsRefresh();
         ViewModel.RefreshWindows();
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            ViewModel.RequestBrowserTabsRefresh();
+        });
 
         // Immediate focus attempt
         this.Focus(FocusState.Programmatic);

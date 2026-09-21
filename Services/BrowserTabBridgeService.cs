@@ -163,7 +163,12 @@ public sealed class BrowserTabBridgeService : IDisposable
                     : string.Empty;
                 if (string.IsNullOrWhiteSpace(browser)) continue;
 
-                connection ??= new BrowserConnection(writer);
+                if (connection == null)
+                {
+                    connection = new BrowserConnection(writer);
+                    connection.Send(new { type = "refresh" });
+                }
+
                 _connections[browser] = connection;
 
                 if (root.TryGetProperty("type", out var type) && type.GetString() == "tabs")

@@ -65,7 +65,6 @@ public class AppSettings
     /// <summary>
     /// Pinned clipboard item texts that survive restarts.
     /// </summary>
-    public List<string> PinnedClipboardItems { get; set; } = new();
 
     /// <summary>
     /// Whether the first-run onboarding walkthrough has been completed or skipped.

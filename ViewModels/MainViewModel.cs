@@ -1146,11 +1146,8 @@ public partial class MainViewModel : BaseViewModel
 
     private void LoadPinnedClipboardItems()
     {
+        // Clipboard content is intentionally session-only; pins are not restored from settings.
         PinnedClipboardItems.Clear();
-        foreach (var text in _settings.PinnedClipboardItems)
-        {
-            PinnedClipboardItems.Add(new ClipboardItem { Text = text, IsPinned = true });
-        }
     }
 
     [RelayCommand]
@@ -1162,17 +1159,12 @@ public partial class MainViewModel : BaseViewModel
         {
             item.IsPinned = false;
             PinnedClipboardItems.Remove(item);
-            _settings.PinnedClipboardItems.Remove(item.Text ?? "");
         }
         else
         {
             item.IsPinned = true;
-            var pinned = new ClipboardItem { Text = item.Text, IsImage = item.IsImage, IsPinned = true };
-            PinnedClipboardItems.Add(pinned);
-            if (!string.IsNullOrEmpty(item.Text))
-                _settings.PinnedClipboardItems.Add(item.Text);
+            PinnedClipboardItems.Add(item);
         }
-        _settingsService.Save(_settings);
     }
 
     private void OnClipboardEnabledChanged()

@@ -16,6 +16,9 @@ public class ClipboardItem : INotifyPropertyChanged
     /// <summary>True if the entry contains an image.</summary>
     public bool IsImage { get; set; }
 
+    /// <summary>Original image bytes kept only for the current application session.</summary>
+    public byte[]? ImageData { get; set; }
+
     private BitmapImage? _imageSource;
     /// <summary>Decoded bitmap for image clipboard entries. Loaded asynchronously after capture.</summary>
     public BitmapImage? ImageSource

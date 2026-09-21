@@ -4,6 +4,8 @@ using BetterWinTab.Models;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Streams;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace BetterWinTab.Services;
 
@@ -207,8 +209,14 @@ public class ClipboardService : IDisposable
             {
                 var streamRef = await content.GetBitmapAsync();
                 using var stream = await streamRef.OpenReadAsync();
+                using var readableStream = stream.AsStreamForRead();
+                using var imageData = new MemoryStream();
+                await readableStream.CopyToAsync(imageData);
+                item.ImageData = imageData.ToArray();
+
                 var bitmap = new BitmapImage();
-                await bitmap.SetSourceAsync(stream);
+                using var previewStream = new MemoryStream(item.ImageData);
+                await bitmap.SetSourceAsync(previewStream.AsRandomAccessStream());
                 item.ImageSource = bitmap;
             }
         }
@@ -223,10 +231,54 @@ public class ClipboardService : IDisposable
     /// </summary>
     public bool CopyToClipboard(ClipboardItem item)
     {
-        if (item.IsImage || string.IsNullOrEmpty(item.Text))
+        if (item.IsImage)
+            return CopyImageToClipboard(item.ImageData);
+
+        if (string.IsNullOrEmpty(item.Text))
             return false;
 
         return CopyTextToClipboard(item.Text);
+    }
+
+    private bool CopyImageToClipboard(byte[]? imageData)
+    {
+        if (imageData is not { Length: > 0 })
+            return false;
+
+        _selfCopying = true;
+        try
+        {
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+            {
+                writer.WriteBytes(imageData);
+                writer.StoreAsync().AsTask().GetAwaiter().GetResult();
+                writer.DetachStream();
+            }
+
+            stream.Seek(0);
+            var package = new DataPackage();
+            package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
+            Clipboard.SetContent(package);
+            Clipboard.Flush();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            ResetSelfCopying();
+        }
+    }
+
+    private void ResetSelfCopying()
+    {
+        if (_dispatcherQueue != null)
+            _dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal, () => _selfCopying = false);
+        else
+            _selfCopying = false;
     }
 
     public bool CopyTextToClipboard(string text)

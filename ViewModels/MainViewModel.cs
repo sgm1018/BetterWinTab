@@ -21,6 +21,11 @@ public partial class MainViewModel : BaseViewModel
     private readonly LaunchService _launchService;
     private readonly VirtualDesktopService _virtualDesktopService;
     private readonly ClipboardService _clipboardService;
+    private readonly SemanticEmbeddingService _semanticEmbeddingService;
+    private readonly SemanticSearchService _semanticSearchService;
+    private readonly Dictionary<string, float[]> _semanticEmbeddingCache = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _semanticSearchCancellation;
+    private int _semanticSearchGeneration;
     private readonly HashSet<IntPtr> _sessionPinnedHandles = new();
     private DispatcherQueue? _dispatcherQueue;
     private System.Threading.Timer? _toastTimer;
@@ -407,6 +412,9 @@ public partial class MainViewModel : BaseViewModel
         _launchService = ServiceContainer.Resolve<LaunchService>();
         _virtualDesktopService = ServiceContainer.Resolve<VirtualDesktopService>();
         _clipboardService = ServiceContainer.Resolve<ClipboardService>();
+        _semanticEmbeddingService = ServiceContainer.Resolve<SemanticEmbeddingService>();
+        _semanticSearchService = ServiceContainer.Resolve<SemanticSearchService>();
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _updateService = ServiceContainer.Resolve<UpdateService>();
         Settings = new SettingsViewModel(_settings, _settingsService);
         Settings.AppearanceChanged += () => AppearanceChanged?.Invoke();
@@ -678,7 +686,95 @@ public partial class MainViewModel : BaseViewModel
 
         // Notify listeners (View) to re-register DWM thumbnails
         WindowsRefreshed?.Invoke();
+
+        StartSemanticSearch(q);
     }
+
+    private void StartSemanticSearch(string query)
+    {
+        _semanticSearchCancellation?.Cancel();
+        _semanticSearchCancellation?.Dispose();
+
+        if (string.IsNullOrEmpty(query) || _cachedFolderWindows.Count == 0)
+            return;
+
+        var cancellation = new CancellationTokenSource();
+        _semanticSearchCancellation = cancellation;
+        var generation = ++_semanticSearchGeneration;
+        _ = ApplySemanticSearchAsync(query, generation, cancellation.Token);
+    }
+
+    private async Task ApplySemanticSearchAsync(string query, int generation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var queryEmbedding = await _semanticEmbeddingService.EmbedQueryAsync(query, cancellationToken);
+            var records = new List<(SemanticSearchRecord Record, float[] Embedding)>();
+
+            foreach (var window in _cachedFolderWindows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var id = GetSemanticId(window);
+                if (!_semanticEmbeddingCache.TryGetValue(id, out var embedding))
+                {
+                    embedding = await _semanticEmbeddingService.EmbedPassageAsync(
+                        GetSemanticText(window),
+                        cancellationToken);
+                    _semanticEmbeddingCache[id] = embedding;
+                }
+
+                records.Add((
+                    new SemanticSearchRecord(id, GetSemanticText(window), "window", window),
+                    embedding));
+            }
+
+            _semanticSearchService.Replace(records);
+            var rankedIds = _semanticSearchService.Search(queryEmbedding, records.Count)
+                .Select(result => result.Record.Id)
+                .ToList();
+
+            _dispatcherQueue?.TryEnqueue(() =>
+            {
+                if (generation != _semanticSearchGeneration || cancellationToken.IsCancellationRequested)
+                    return;
+
+                var windowsById = _cachedFolderWindows.ToDictionary(GetSemanticId, StringComparer.Ordinal);
+                var ranked = rankedIds
+                    .Where(windowsById.ContainsKey)
+                    .Select(id => windowsById[id])
+                    .ToList();
+
+                Windows.Clear();
+                foreach (var window in ranked)
+                    Windows.Add(new WindowItemViewModel(window, _virtualDesktopService.HasMultipleDesktops));
+
+                SelectedWindow = Windows.Count > 0 ? Windows[0] : null;
+                HasNoWindows = Windows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                WindowsRefreshed?.Invoke();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Semantic search unavailable: {ex.Message}");
+        }
+    }
+
+    private static string GetSemanticId(WindowInfo window)
+        => window.IsBrowserTab
+            ? $"tab:{window.BrowserName}:{window.BrowserTabId}"
+            : $"window:{window.Handle.ToInt64()}";
+
+    private static string GetSemanticText(WindowInfo window)
+        => string.Join(" | ", new[]
+        {
+            window.Title,
+            window.ProcessName,
+            window.BrowserName,
+            window.Url
+        }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
     partial void OnSearchQueryChanged(string value)
     {

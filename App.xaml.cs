@@ -106,6 +106,8 @@ namespace BetterWinTab
             ServiceContainer.RegisterSingleton(() => new LaunchService());
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
             ServiceContainer.RegisterSingleton(() => new ClipboardService());
+            ServiceContainer.RegisterSingleton(() => new SemanticModelService());
+            ServiceContainer.RegisterSingleton(() => new SemanticSearchService());
             ServiceContainer.RegisterSingleton(() => new UpdateService());
         }
 

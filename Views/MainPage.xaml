@@ -28,6 +28,72 @@
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
         <conv:IntToVisibilityConverter x:Key="IntToVisibilityConverter" />
+
+        <!-- Neon-styled list item used by the Notes sidebar (same look as the folder list). -->
+        <Style x:Key="NotesListItemStyle" TargetType="ListViewItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="AllowFocusOnInteraction" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Grid CornerRadius="8">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderHoverBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenDimBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderSelectedBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Selected">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderSelectedBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="SelectedUnfocused">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderSelectedBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="SelectedPointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderSelectedBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="SelectedPressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="HoverBorder.Background" Value="{StaticResource FolderSelectedBrush}" />
+                                            <Setter Target="HoverBorder.BorderBrush" Value="{StaticResource NeonGreenBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="HoverBorder" CornerRadius="8" BorderThickness="1"
+                                    BorderBrush="Transparent" Background="Transparent" />
+                            <ContentPresenter
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                Padding="{TemplateBinding Padding}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
     <Grid>
@@ -394,6 +460,41 @@
                                        FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Grid.Column="1" Grid.Row="1" Text="Clipboard history"
+                                       FontSize="{StaticResource FontSizeSmall}"
+                                       Foreground="{StaticResource TextMutedBrush}" />
+                        </Grid>
+                    </Button>
+                </Grid>
+
+                <!-- Notes Folder (pinned below Clipboard) -->
+                <Grid CornerRadius="8" Margin="0,0,0,4"
+                      Visibility="{x:Bind ViewModel.NotesFolderVisibility, Mode=OneWay}">
+                    <!-- Selection highlight -->
+                    <Border CornerRadius="8" BorderThickness="2"
+                            Background="{StaticResource FolderSelectedBrush}"
+                            BorderBrush="{StaticResource NeonGreenBrush}"
+                            Visibility="{x:Bind ViewModel.NotesFolderIsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            IsHitTestVisible="False" />
+                    <Button HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.SelectNotesFolderCommand}"
+                            Background="Transparent" BorderThickness="0" Padding="0"
+                            HorizontalContentAlignment="Stretch">
+                        <Grid Padding="12,10" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE70B;" FontSize="22"
+                                      Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Grid.Row="0" Text="Notes"
+                                       FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Grid.Column="1" Grid.Row="1"
+                                       Text="{x:Bind ViewModel.Notes.NotesCountLabel, Mode=OneWay}"
                                        FontSize="{StaticResource FontSizeSmall}"
                                        Foreground="{StaticResource TextMutedBrush}" />
                         </Grid>
@@ -977,6 +1078,149 @@
                                    Foreground="{StaticResource TextPrimaryBrush}" />
                     </StackPanel>
                 </Border>
+            </Grid>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- NOTES PANEL — notes sidebar + rich-text editor (WebView2)      -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <Grid
+                x:Name="NotesPanel"
+                Grid.Row="0"
+                Grid.RowSpan="2"
+                Visibility="{x:Bind ViewModel.NotesPanelVisibility, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="270" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Notes sidebar -->
+                <Grid Grid.Column="0"
+                      Background="{StaticResource DarkSurfaceBrush}"
+                      BorderBrush="{StaticResource NeonGreenSubtleBrush}"
+                      BorderThickness="0,0,1,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Padding="16,16,16,10" Spacing="12">
+                        <StackPanel>
+                            <TextBlock Text="Notes" FontSize="{StaticResource FontSizeLarge}" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{x:Bind ViewModel.Notes.NotesCountLabel, Mode=OneWay}"
+                                       FontSize="{StaticResource FontSizeSmall}"
+                                       Foreground="{StaticResource TextMutedBrush}" />
+                        </StackPanel>
+                        <Button Content="+ New note"
+                                Command="{x:Bind ViewModel.Notes.NewNoteCommand}"
+                                Style="{StaticResource NeonButtonStyle}"
+                                HorizontalAlignment="Stretch" />
+                        <Border Height="1" Background="{StaticResource NeonGreenSubtleBrush}" />
+                    </StackPanel>
+
+                    <ListView
+                        x:Name="NotesList"
+                        Grid.Row="1"
+                        ItemsSource="{x:Bind ViewModel.Notes.Notes}"
+                        SelectedItem="{x:Bind ViewModel.Notes.SelectedNote, Mode=TwoWay}"
+                        SelectionMode="Single"
+                        Background="Transparent"
+                        IsTabStop="False"
+                        AllowFocusOnInteraction="False"
+                        XYFocusKeyboardNavigation="Disabled"
+                        Padding="8,0,8,12"
+                        ItemContainerStyle="{StaticResource NotesListItemStyle}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NoteItemViewModel">
+                                <Grid Padding="12,9,6,9" ColumnSpacing="6" Background="Transparent">
+                                    <Grid.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Duplicate" Click="NoteItem_Clone" Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE8C8;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Delete" Click="NoteItem_Delete" Tag="{x:Bind}"
+                                                            Foreground="{StaticResource DangerRedBrush}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE74D;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyout>
+                                    </Grid.ContextFlyout>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{x:Bind DisplayTitle, Mode=OneWay}"
+                                                   FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Preview, Mode=OneWay}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" MaxLines="1"
+                                                   Visibility="{x:Bind Preview, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}" />
+                                        <TextBlock Text="{x:Bind UpdatedLabel, Mode=OneWay}"
+                                                   FontSize="{StaticResource FontSizeXSmall}"
+                                                   Foreground="{StaticResource TextMutedBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button Background="Transparent" BorderThickness="0" Padding="6"
+                                                ToolTipService.ToolTip="Duplicate note"
+                                                Click="NoteItem_Clone" Tag="{x:Bind}">
+                                            <FontIcon Glyph="&#xE8C8;" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                                        </Button>
+                                        <Button Background="Transparent" BorderThickness="0" Padding="6"
+                                                ToolTipService.ToolTip="Delete note">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuFlyoutItem Text="Delete this note" Click="NoteItem_Delete" Tag="{x:Bind}"
+                                                                    Foreground="{StaticResource DangerRedBrush}">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE74D;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+
+                <!-- Editor area -->
+                <Grid Grid.Column="1" Background="{StaticResource PureBlackBrush}">
+                    <Grid Visibility="{x:Bind ViewModel.Notes.EditorVisibility, Mode=OneWay}">
+                        <WebView2 x:Name="NotesWebView" Opacity="0" />
+                        <TextBlock x:Name="NotesEditorStatus"
+                                   Text="Loading editor..."
+                                   FontSize="{StaticResource FontSizeMedium}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap" MaxWidth="460" TextAlignment="Center"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <StackPanel Visibility="{x:Bind ViewModel.Notes.EmptyStateVisibility, Mode=OneWay}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                        <FontIcon Glyph="&#xE70B;" FontSize="48" Foreground="{StaticResource NeonGreenDimBrush}" />
+                        <TextBlock Text="No notes yet" FontSize="{StaticResource FontSizeLarge}" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Create a note and type '/' to format it"
+                                   FontSize="{StaticResource FontSizeBase}"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Button Content="+ New note"
+                                Command="{x:Bind ViewModel.Notes.NewNoteCommand}"
+                                Style="{StaticResource NeonButtonStyle}"
+                                HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
             </Grid>
 
             <!-- Empty State (also hosts the app launcher when search yields no windows) -->

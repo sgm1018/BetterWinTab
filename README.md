@@ -189,6 +189,9 @@ Selecting an entry copies it back to the system clipboard, including captured im
 
 <img width="2554" height="1070" alt="Captura de pantalla 2026-04-29 025645" src="https://github.com/user-attachments/assets/1697cb59-17ac-49ac-8701-df1290018fe2" />
 
+### Notes
+
+The rich-text Notes editor converts Markdown copied as plain text into formatted notes, including headings, lists, blockquotes, code blocks, tables, and links. It also supports pasting images from the clipboard and dropping image files. Images are embedded in their notes and remain available after BetterWinTab restarts.
 
 ### Recycle Bin Shortcut
 

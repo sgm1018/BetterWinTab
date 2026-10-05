@@ -106,6 +106,7 @@ namespace BetterWinTab
             ServiceContainer.RegisterSingleton(() => new LaunchService());
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
             ServiceContainer.RegisterSingleton(() => new ClipboardService());
+            ServiceContainer.RegisterSingleton(() => new NotesService());
             ServiceContainer.RegisterSingleton(() => new SemanticModelService());
             ServiceContainer.RegisterSingleton(() => new SemanticEmbeddingService(
                 ServiceContainer.Resolve<SemanticModelService>()));
@@ -200,6 +201,15 @@ namespace BetterWinTab
             try
             {
                 ServiceContainer.Resolve<BrowserTabBridgeService>().Dispose();
+            }
+            catch
+            {
+                // Best-effort cleanup only.
+            }
+
+            try
+            {
+                ServiceContainer.Resolve<NotesService>().Dispose();
             }
             catch
             {

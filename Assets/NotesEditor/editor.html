@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notes</title>
+    <link rel="stylesheet" href="editor.css" />
+</head>
+<body class="font-handwritten">
+    <header id="topbar">
+        <span id="save-state"></span>
+        <button id="font-button" type="button" title="Font">Aa</button>
+    </header>
+
+    <main id="scroller">
+        <article id="page">
+            <h1 id="title" contenteditable="true" spellcheck="false" data-empty-text="Untitled"></h1>
+            <div id="editor" contenteditable="true" spellcheck="false"></div>
+        </article>
+    </main>
+
+    <!-- "/" command menu -->
+    <div id="slash-menu" class="popover hidden" role="listbox"></div>
+
+    <!-- Floating toolbar shown over selected text -->
+    <div id="bubble" class="hidden" role="toolbar">
+        <button type="button" data-action="turn-into" class="wide" title="Turn into"><span id="turn-label">Text</span> <span class="caret">&#9662;</span></button>
+        <span class="sep"></span>
+        <button type="button" data-action="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button type="button" data-action="italic" title="Italic (Ctrl+I)"><i>i</i></button>
+        <button type="button" data-action="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+        <button type="button" data-action="strike" title="Strikethrough (Ctrl+Shift+S)"><s>S</s></button>
+        <button type="button" data-action="code" title="Inline code (Ctrl+E)" class="mono">&lt;/&gt;</button>
+        <button type="button" data-action="link" title="Link (Ctrl+K)">&#128279;</button>
+        <span class="sep"></span>
+        <button type="button" data-action="color" class="wide" title="Text color / highlight">
+            <span id="color-swatch">A</span> <span class="caret">&#9662;</span>
+        </button>
+        <button type="button" data-action="copy-style" title="Copiar estilo" aria-label="Copiar estilo">
+            <svg class="paintbrush-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m14.2 5.4 4.4 4.4M12.7 6.9l4.4 4.4M11.3 8.3l4.4 4.4m-5.9-2.9 4.4 4.4m-6-2.7 4.4 4.4M6.9 14.5l3.2 3.2M5.8 16.5c-1.2.2-2.1.8-2.7 2.5 1.6 1 3.8.7 5-.6l1.4-1.5-2.4-2.4-1.3 1.3Z" />
+            </svg>
+        </button>
+        <button type="button" data-action="clear" title="Clear formatting">&#10005;</button>
+    </div>
+
+    <!-- Sub-popovers -->
+    <div id="turn-menu" class="popover hidden"></div>
+    <div id="color-menu" class="popover hidden"></div>
+    <div id="font-menu" class="popover hidden"></div>
+    <div id="link-box" class="popover hidden">
+        <input id="link-input" type="text" placeholder="Paste a link and press Enter" spellcheck="false" />
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/sanitize.js"></script>
+    <script src="js/markdown.js"></script>
+    <script src="js/blocks.js"></script>
+    <script src="js/menus.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

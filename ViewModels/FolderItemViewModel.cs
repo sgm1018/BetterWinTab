@@ -41,6 +41,7 @@ public partial class FolderItemViewModel : BaseViewModel
             FolderType.SmartClass => $"Class: {model.ClassNameFilter}",
             FolderType.SmartRules => model.GetFilterSummary(),
             FolderType.Clipboard => "Clipboard history",
+            FolderType.Notes => "Your notes",
             FolderType.Manual => "Custom folder",
             _ => ""
         };

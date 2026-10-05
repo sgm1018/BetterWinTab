@@ -83,6 +83,19 @@ public partial class MainViewModel : BaseViewModel
         RecycleBinFolderVM != null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NotesFolderVisibility))]
+    [NotifyPropertyChangedFor(nameof(NotesFolderIsSelected))]
+    private FolderItemViewModel? _notesFolderVM;
+
+    /// <summary>True when the Notes folder tab is selected (for button highlight).</summary>
+    public bool NotesFolderIsSelected => SelectedFolder == NotesFolderVM && NotesFolderVM != null;
+    /// <summary>Controls visibility of the pinned Notes folder button in the sidebar.</summary>
+    public Microsoft.UI.Xaml.Visibility NotesFolderVisibility =>
+        NotesFolderVM != null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    public NotesViewModel Notes { get; }
+
+    [ObservableProperty]
     private WindowItemViewModel? _selectedWindow;
 
     [ObservableProperty]
@@ -280,7 +293,13 @@ public partial class MainViewModel : BaseViewModel
 
     /// <summary>Clipboard folder visibility helper.</summary>
     public Visibility ClipboardPanelVisibility => IsClipboardFolderSelected ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility WindowGridVisibility => IsClipboardFolderSelected ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>True when the Notes folder is selected (shows the notes editor instead of windows).</summary>
+    public bool IsNotesFolderSelected => SelectedFolder?.Model?.Type == FolderType.Notes;
+    public Visibility NotesPanelVisibility => IsNotesFolderSelected ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility WindowGridVisibility =>
+        IsClipboardFolderSelected || IsNotesFolderSelected ? Visibility.Collapsed : Visibility.Visible;
 
     // ── Smart Rules folder creation/editing ──
 
@@ -342,7 +361,7 @@ public partial class MainViewModel : BaseViewModel
     public string SearchResultCount => IsSearchActive ? $"{Windows.Count} result{(Windows.Count == 1 ? "" : "s")}" : string.Empty;
 
     // Launch panel visibility helpers
-    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !_isAppSearchMode && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && !_isAppSearchMode && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowLaunchSuggestions => IsSearchActive && Windows.Count == 0 && LaunchResults.Count > 0 && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowRunFallback       => IsSearchActive && Windows.Count == 0 && LaunchResults.Count == 0 && !_isAppSearchMode && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
 
@@ -356,7 +375,8 @@ public partial class MainViewModel : BaseViewModel
     public bool CanDeleteSelectedFolder =>
         SelectedFolder?.Model?.Type != FolderType.All &&
         SelectedFolder?.Model?.Type != FolderType.Clipboard &&
-        SelectedFolder?.Model?.Type != FolderType.RecycleBin;
+        SelectedFolder?.Model?.Type != FolderType.RecycleBin &&
+        SelectedFolder?.Model?.Type != FolderType.Notes;
 
     private readonly List<WindowInfo> _cachedFolderWindows = new();
     private int _windowGridColumnCount = 1;
@@ -432,6 +452,7 @@ public partial class MainViewModel : BaseViewModel
         Settings.BrowserTabsChanged += RefreshWindows;
         _browserTabBridgeService.TabsChanged += OnBrowserTabsChanged;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
+        Notes = new NotesViewModel(ServiceContainer.Resolve<NotesService>());
 
         Title = "BetterWinTab";
 
@@ -459,6 +480,13 @@ public partial class MainViewModel : BaseViewModel
         if (!_folderService.Folders.Any(f => f.Type == FolderType.RecycleBin))
         {
             _folderService.CreateRecycleBinFolder();
+            SaveSettings();
+        }
+
+        // Ensure Notes folder always exists (pinned special folder, cannot be deleted)
+        if (!_folderService.Folders.Any(f => f.Type == FolderType.Notes))
+        {
+            _folderService.CreateNotesFolder();
             SaveSettings();
         }
 
@@ -520,7 +548,8 @@ public partial class MainViewModel : BaseViewModel
         {
             _syncingSelection = true;
             SelectedNonClipboardFolder = (value?.Model?.Type != FolderType.Clipboard &&
-                                          value?.Model?.Type != FolderType.RecycleBin) ? value : null;
+                                          value?.Model?.Type != FolderType.RecycleBin &&
+                                          value?.Model?.Type != FolderType.Notes) ? value : null;
             _syncingSelection = false;
         }
 
@@ -540,6 +569,14 @@ public partial class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(WindowGridVisibility));
         OnPropertyChanged(nameof(ClipboardFolderIsSelected));
         OnPropertyChanged(nameof(RecycleBinFolderIsSelected));
+        NotifyNotesSelectionChanged();
+    }
+
+    private void NotifyNotesSelectionChanged()
+    {
+        OnPropertyChanged(nameof(IsNotesFolderSelected));
+        OnPropertyChanged(nameof(NotesPanelVisibility));
+        OnPropertyChanged(nameof(NotesFolderIsSelected));
     }
 
     partial void OnSelectedNonClipboardFolderChanged(FolderItemViewModel? value)
@@ -580,6 +617,7 @@ public partial class MainViewModel : BaseViewModel
         NonClipboardFolders.Clear();
         ClipboardFolderVM = null;
         RecycleBinFolderVM = null;
+        NotesFolderVM = null;
 
         foreach (var folder in _folderService.Folders)
         {
@@ -589,6 +627,8 @@ public partial class MainViewModel : BaseViewModel
                 ClipboardFolderVM = vm;
             else if (folder.Type == FolderType.RecycleBin)
                 RecycleBinFolderVM = vm;
+            else if (folder.Type == FolderType.Notes)
+                NotesFolderVM = vm;
             else
                 NonClipboardFolders.Add(vm);
         }
@@ -865,6 +905,7 @@ public partial class MainViewModel : BaseViewModel
                 OnPropertyChanged(nameof(ClipboardPanelVisibility));
                 OnPropertyChanged(nameof(WindowGridVisibility));
                 OnPropertyChanged(nameof(ClipboardFolderIsSelected));
+                NotifyNotesSelectionChanged();
                 RefreshWindows();
                 return; // RefreshWindows already calls ApplySearchFilter
             }
@@ -1101,6 +1142,16 @@ public partial class MainViewModel : BaseViewModel
     {
         if (ClipboardFolderVM != null)
             SelectedFolder = ClipboardFolderVM;
+    }
+
+    /// <summary>
+    /// Selects the Notes folder (called by the pinned sidebar button).
+    /// </summary>
+    [RelayCommand]
+    public void SelectNotesFolder()
+    {
+        if (NotesFolderVM != null)
+            SelectedFolder = NotesFolderVM;
     }
 
     /// <summary>
@@ -1445,7 +1496,8 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     public void ShowEditFolderPanel(FolderItemViewModel folder)
     {
-        if (folder.Model.Type == FolderType.All || folder.Model.Type == FolderType.Clipboard) return;
+        if (folder.Model.Type == FolderType.All || folder.Model.Type == FolderType.Clipboard ||
+            folder.Model.Type == FolderType.Notes) return;
 
         _editingFolder = folder;
         EditFolderName = folder.Name;
@@ -1547,7 +1599,8 @@ public partial class MainViewModel : BaseViewModel
     {
         if (folder.Model.Type == FolderType.All ||
             folder.Model.Type == FolderType.Clipboard ||
-            folder.Model.Type == FolderType.RecycleBin) return;
+            folder.Model.Type == FolderType.RecycleBin ||
+            folder.Model.Type == FolderType.Notes) return;
 
         if (_folderService.RemoveFolder(folder.Model.Id))
         {
@@ -1630,7 +1683,8 @@ public partial class MainViewModel : BaseViewModel
         if (SelectedFolder?.Model == null) return;
         if (SelectedFolder.Model.Type == FolderType.All ||
             SelectedFolder.Model.Type == FolderType.Clipboard ||
-            SelectedFolder.Model.Type == FolderType.RecycleBin) return;
+            SelectedFolder.Model.Type == FolderType.RecycleBin ||
+            SelectedFolder.Model.Type == FolderType.Notes) return;
 
         if (_folderService.RemoveFolder(SelectedFolder.Model.Id))
         {

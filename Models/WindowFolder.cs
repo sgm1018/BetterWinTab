@@ -66,6 +66,7 @@ public class WindowFolder
             FolderType.Manual => "Custom folder",
             FolderType.Clipboard => "Clipboard history",
             FolderType.RecycleBin => "Recycle Bin",
+            FolderType.Notes => "Your notes",
             _ => ""
         };
     }
@@ -86,5 +87,7 @@ public enum FolderType
     /// <summary>Special clipboard history folder.</summary>
     Clipboard,
     /// <summary>Special recycle bin folder — opens the Windows Recycle Bin.</summary>
-    RecycleBin
+    RecycleBin,
+    /// <summary>Special notes folder — shows the rich-text notes editor.</summary>
+    Notes
 }

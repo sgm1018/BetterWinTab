@@ -53,8 +53,8 @@ public class FolderService
 
         folder.Windows.Clear();
 
-        // Clipboard and RecycleBin folders don't contain windows
-        if (folder.Type == FolderType.Clipboard || folder.Type == FolderType.RecycleBin)
+        // Clipboard, RecycleBin and Notes folders don't contain windows
+        if (folder.Type is FolderType.Clipboard or FolderType.RecycleBin or FolderType.Notes)
             return;
 
         var filtered = folder.Type switch
@@ -173,13 +173,31 @@ public class FolderService
     }
 
     /// <summary>
+    /// Creates the special Notes folder (singleton — only one should exist).
+    /// </summary>
+    public WindowFolder CreateNotesFolder()
+    {
+        var folder = new WindowFolder
+        {
+            Name = "Notes",
+            Icon = "\uE70B", // QuickNote icon
+            BackgroundColor = "#2A2A2A",
+            Type = FolderType.Notes,
+            SortOrder = Folders.Count
+        };
+        Folders.Add(folder);
+        return folder;
+    }
+
+    /// <summary>
     /// Removes a folder by its ID. Cannot remove built-in special folders.
     /// </summary>
     public bool RemoveFolder(string folderId)
     {
         var folder = Folders.FirstOrDefault(f => f.Id == folderId);
         if (folder == null || folder.Type == FolderType.All ||
-            folder.Type == FolderType.Clipboard || folder.Type == FolderType.RecycleBin)
+            folder.Type == FolderType.Clipboard || folder.Type == FolderType.RecycleBin ||
+            folder.Type == FolderType.Notes)
             return false;
 
         return Folders.Remove(folder);

@@ -85,6 +85,8 @@ public sealed partial class MainPage : Page
         // Listen for folder changes to refresh thumbnails
         ViewModel.WindowsRefreshed += OnWindowsRefreshed;
 
+        InitializeNotesPanel();
+
         ViewModel.Settings.AppearanceChanged += OnAppearanceChanged;
         ViewModel.Settings.AppearancePreviewChanged += () => ApplyPreviewAppearance();
         ViewModel.Settings.PropertyChanged += (_, e) =>
@@ -322,6 +324,7 @@ public sealed partial class MainPage : Page
     {
         // Clear search so the overlay starts fresh next time
         ViewModel.ClearSearch();
+        FlushNotes();
         _thumbnailService.UnregisterAll();
         _registeredThumbRects.Clear();
     }
@@ -826,6 +829,9 @@ public sealed partial class MainPage : Page
 
     private void KeyboardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        // Arrow keys belong to the notes editor while it has focus.
+        if (IsNotesEditorFocused()) return;
+
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
         
         switch (args.KeyboardAccelerator.Key)
@@ -857,7 +863,12 @@ public sealed partial class MainPage : Page
                 args.Handled = true;
                 break;
             case Windows.System.VirtualKey.Up:
-                if (ViewModel.IsClipboardFolderSelected)
+                if (ViewModel.IsNotesFolderSelected && !searchBoxFocused)
+                {
+                    ViewModel.Notes.SelectPreviousNote();
+                    ScrollSelectedNoteIntoView();
+                }
+                else if (ViewModel.IsClipboardFolderSelected)
                 {
                     ViewModel.NavigateClipboardUp();
                     ScrollSelectedClipboardItemIntoView();
@@ -877,7 +888,12 @@ public sealed partial class MainPage : Page
                 args.Handled = true;
                 break;
             case Windows.System.VirtualKey.Down:
-                if (ViewModel.IsClipboardFolderSelected)
+                if (ViewModel.IsNotesFolderSelected && !searchBoxFocused)
+                {
+                    ViewModel.Notes.SelectNextNote();
+                    ScrollSelectedNoteIntoView();
+                }
+                else if (ViewModel.IsClipboardFolderSelected)
                 {
                     ViewModel.NavigateClipboardDown();
                     ScrollSelectedClipboardItemIntoView();
@@ -958,6 +974,9 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        // The notes editor (WebView2) owns its keys (Ctrl+B, Tab, Enter, typing...).
+        if (IsNotesEditorFocused()) return;
+
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
 
         if (!ViewModel.IsSemanticSearchReady &&
@@ -1009,7 +1028,12 @@ public sealed partial class MainPage : Page
         switch (e.Key)
         {
             case Windows.System.VirtualKey.Up:
-                if (ViewModel.IsClipboardFolderSelected)
+                if (ViewModel.IsNotesFolderSelected && !searchBoxFocused)
+                {
+                    ViewModel.Notes.SelectPreviousNote();
+                    ScrollSelectedNoteIntoView();
+                }
+                else if (ViewModel.IsClipboardFolderSelected)
                 {
                     ViewModel.NavigateClipboardUp();
                     ScrollSelectedClipboardItemIntoView();
@@ -1033,7 +1057,12 @@ public sealed partial class MainPage : Page
                 break;
 
             case Windows.System.VirtualKey.Down:
-                if (ViewModel.IsClipboardFolderSelected)
+                if (ViewModel.IsNotesFolderSelected && !searchBoxFocused)
+                {
+                    ViewModel.Notes.SelectNextNote();
+                    ScrollSelectedNoteIntoView();
+                }
+                else if (ViewModel.IsClipboardFolderSelected)
                 {
                     ViewModel.NavigateClipboardDown();
                     ScrollSelectedClipboardItemIntoView();
@@ -1089,6 +1118,13 @@ public sealed partial class MainPage : Page
                 if (ViewModel.IsClipboardFolderSelected)
                 {
                     ViewModel.CopySelectedClipboardItem();
+                    e.Handled = true;
+                    break;
+                }
+                // In Notes, Enter jumps into the editor of the selected note
+                if (ViewModel.IsNotesFolderSelected && !ViewModel.IsSearchActive)
+                {
+                    if (ViewModel.Notes.SelectedNote != null) RequestEditorFocus("body");
                     e.Handled = true;
                     break;
                 }

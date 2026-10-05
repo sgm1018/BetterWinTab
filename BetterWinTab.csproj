@@ -32,6 +32,7 @@
         <PublishProfile>win-$(Platform).pubxml</PublishProfile>
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &gt;= 8">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &lt; 8">win10-x86;win10-x64;win10-arm64</RuntimeIdentifiers>
+        <OnnxRuntimeVersion>1.30.0</OnnxRuntimeVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -42,6 +43,8 @@
         <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
         <Content Include="Assets\StoreLogo.png" />
         <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+        <!-- Notes editor (HTML/CSS/JS hosted in WebView2) -->
+        <Content Include="Assets\NotesEditor\**\*" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup>
@@ -52,7 +55,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="$(OnnxRuntimeVersion)" />
         <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
         <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.*" />
         <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
@@ -81,4 +84,28 @@
     <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
         <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
     </PropertyGroup>
+
+    <!-- Windows App SDK also stages an older ONNX DLL for Windows ML.
+         Our direct Microsoft.ML.OnnxRuntime reference needs its matching native runtime. -->
+    <PropertyGroup Condition="'$(Platform)' == 'x64'">
+        <OnnxRuntimeNativeRid>win-x64</OnnxRuntimeNativeRid>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Platform)' == 'ARM64'">
+        <OnnxRuntimeNativeRid>win-arm64</OnnxRuntimeNativeRid>
+    </PropertyGroup>
+    <Target Name="CopyMatchingOnnxRuntimeNativeLibraries"
+            AfterTargets="Build;Publish"
+            Condition="'$(OnnxRuntimeNativeRid)' != ''">
+        <ItemGroup>
+            <_OnnxRuntimeNative Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime\$(OnnxRuntimeVersion)\runtimes\$(OnnxRuntimeNativeRid)\native\onnxruntime.dll" />
+            <_OnnxRuntimeNative Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime\$(OnnxRuntimeVersion)\runtimes\$(OnnxRuntimeNativeRid)\native\onnxruntime_providers_shared.dll" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_OnnxRuntimeNative)"
+              DestinationFolder="$(OutDir)"
+              SkipUnchangedFiles="false" />
+        <Copy SourceFiles="@(_OnnxRuntimeNative)"
+              DestinationFolder="$(PublishDir)"
+              Condition="'$(PublishDir)' != ''"
+              SkipUnchangedFiles="false" />
+    </Target>
 </Project>

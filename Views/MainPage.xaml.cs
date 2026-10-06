@@ -920,6 +920,8 @@ public sealed partial class MainPage : Page
     /// </summary>
     private void HandleGlobalKey(KeyRoutedEventArgs e)
     {
+        if (_isNotesFolderDialogOpen) return;
+
         // Let the Add/Edit Folder dialog handle its own keys
         if (ViewModel.IsAddFolderPanelVisible)
         {

@@ -16,6 +16,7 @@ public class NotesService : IDisposable
         "BetterWinTab");
 
     private static readonly string NotesPath = Path.Combine(NotesDir, "notes.json");
+    private static readonly string FoldersPath = Path.Combine(NotesDir, "notes-folders.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,12 +29,14 @@ public class NotesService : IDisposable
     private readonly object _sync = new();
     private readonly object _writeLock = new();
     private readonly List<Note> _notes = new();
+    private readonly List<NoteFolder> _folders = new();
     private readonly Timer _saveTimer;
     private bool _dirty;
 
     public NotesService()
     {
         _saveTimer = new Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
+        LoadFolders();
         Load();
     }
 
@@ -41,6 +44,41 @@ public class NotesService : IDisposable
     public IReadOnlyList<Note> Notes
     {
         get { lock (_sync) return _notes.ToList(); }
+    }
+
+    public IReadOnlyList<NoteFolder> Folders
+    {
+        get { lock (_sync) return _folders.ToList(); }
+    }
+
+    private void LoadFolders()
+    {
+        try
+        {
+            if (!File.Exists(FoldersPath)) return;
+            var json = File.ReadAllText(FoldersPath);
+            var folders = JsonSerializer.Deserialize<List<NoteFolder>>(json, JsonOptions);
+            if (folders == null) return;
+            lock (_sync)
+            {
+                _folders.Clear();
+                _folders.AddRange(folders
+                    .Where(folder => !string.IsNullOrWhiteSpace(folder.Id) && !string.IsNullOrWhiteSpace(folder.Name))
+                    .OrderBy(folder => folder.SortOrder));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"NotesService.LoadFolders: {ex.Message}");
+            try
+            {
+                File.Copy(FoldersPath, FoldersPath + ".corrupt", overwrite: true);
+            }
+            catch (Exception backupException)
+            {
+                System.Diagnostics.Debug.WriteLine($"NotesService.LoadFolders backup failed: {backupException.Message}");
+            }
+        }
     }
 
     private void Load()
@@ -55,6 +93,12 @@ public class NotesService : IDisposable
             {
                 _notes.Clear();
                 _notes.AddRange(notes.Where(n => !string.IsNullOrEmpty(n.Id)).OrderBy(n => n.SortOrder));
+                var folderIds = _folders.Select(folder => folder.Id).ToHashSet(StringComparer.Ordinal);
+                foreach (var note in _notes)
+                {
+                    if (note.FolderId != null && !folderIds.Contains(note.FolderId))
+                        note.FolderId = null;
+                }
             }
         }
         catch (Exception ex)
@@ -88,6 +132,45 @@ public class NotesService : IDisposable
         ScheduleSave();
     }
 
+    public NoteFolder CreateFolder(string name)
+    {
+        var folder = new NoteFolder { Name = name };
+        lock (_sync)
+        {
+            folder.SortOrder = _folders.Count;
+            _folders.Add(folder);
+        }
+        ScheduleSave();
+        return folder;
+    }
+
+    public bool DeleteFolder(string id)
+    {
+        lock (_sync)
+        {
+            if (_folders.RemoveAll(folder => folder.Id == id) == 0)
+                return false;
+            foreach (var note in _notes.Where(note => note.FolderId == id))
+                note.FolderId = null;
+        }
+        ScheduleSave();
+        return true;
+    }
+
+    public bool MoveToFolder(string id, string? folderId)
+    {
+        lock (_sync)
+        {
+            var note = _notes.FirstOrDefault(item => item.Id == id);
+            if (note == null || (folderId != null && !_folders.Any(folder => folder.Id == folderId)))
+                return false;
+            if (note.FolderId == folderId) return false;
+            note.FolderId = folderId;
+        }
+        ScheduleSave();
+        return true;
+    }
+
     /// <summary>Applies an edit coming from the editor. Returns false when nothing changed.</summary>
     public bool Update(string id, string title, string html, string font)
     {
@@ -116,21 +199,23 @@ public class NotesService : IDisposable
     {
         lock (_writeLock)
         {
-            string json;
+            string notesJson;
+            string foldersJson;
             lock (_sync)
             {
                 if (!_dirty) return;
                 for (int i = 0; i < _notes.Count; i++) _notes[i].SortOrder = i;
-                json = JsonSerializer.Serialize(_notes, JsonOptions);
+                for (int i = 0; i < _folders.Count; i++) _folders[i].SortOrder = i;
+                notesJson = JsonSerializer.Serialize(_notes, JsonOptions);
+                foldersJson = JsonSerializer.Serialize(_folders, JsonOptions);
                 _dirty = false;
             }
 
             try
             {
                 Directory.CreateDirectory(NotesDir);
-                var tmp = NotesPath + ".tmp";
-                File.WriteAllText(tmp, json);
-                File.Move(tmp, NotesPath, overwrite: true);
+                WriteAtomically(NotesPath, notesJson);
+                WriteAtomically(FoldersPath, foldersJson);
             }
             catch (Exception ex)
             {
@@ -138,6 +223,13 @@ public class NotesService : IDisposable
                 lock (_sync) _dirty = true;
             }
         }
+    }
+
+    private static void WriteAtomically(string path, string contents)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, contents);
+        File.Move(tmp, path, overwrite: true);
     }
 
     public void Dispose()

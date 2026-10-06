@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Web.WebView2.Core;
 
@@ -17,6 +18,7 @@ public sealed partial class MainPage
     private bool _notesEditorInitStarted;
     private bool _notesEditorReady;
     private string? _pendingNotesFocus;
+    private bool _isNotesFolderDialogOpen;
 
     private void InitializeNotesPanel()
     {
@@ -251,5 +253,103 @@ public sealed partial class MainPage
     {
         if (sender is FrameworkElement { Tag: NoteItemViewModel note })
             ViewModel.Notes.DeleteNote(note);
+    }
+
+    private async void NotesCreateFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var nameInput = new TextBox { PlaceholderText = "Folder name" };
+        var dialog = new ContentDialog
+        {
+            Title = "Create notes folder",
+            Content = nameInput,
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        _isNotesFolderDialogOpen = true;
+        try
+        {
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                var name = nameInput.Text.Trim();
+                if (name.Length > 0)
+                    ViewModel.Notes.CreateFolder(name);
+            }
+        }
+        finally
+        {
+            _isNotesFolderDialogOpen = false;
+        }
+    }
+
+    private async void NoteFolder_Delete(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: NoteFolderItemViewModel folder }) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Delete notes folder?",
+            Content = $"Delete \"{folder.Name}\"? Notes in this folder will be moved to All notes.",
+            PrimaryButtonText = "Delete folder",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+
+        _isNotesFolderDialogOpen = true;
+        try
+        {
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                ViewModel.Notes.DeleteFolder(folder);
+        }
+        finally
+        {
+            _isNotesFolderDialogOpen = false;
+        }
+    }
+
+    private void NotesShowAll_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Notes.SelectAllNotes();
+    }
+
+    private void NotesList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        if (e.Items.Count == 0 || e.Items[0] is not NoteItemViewModel note) return;
+        e.Data.Properties["NoteItem"] = note;
+        e.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    private void NoteFolder_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Properties.ContainsKey("NoteItem")) return;
+        e.AcceptedOperation = DataPackageOperation.Move;
+        e.DragUIOverride.Caption = "Move to folder";
+        e.DragUIOverride.IsCaptionVisible = true;
+    }
+
+    private void NoteFolder_Drop(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Properties.TryGetValue("NoteItem", out var item)
+            && item is NoteItemViewModel note
+            && sender is FrameworkElement { DataContext: NoteFolderItemViewModel folder })
+            ViewModel.Notes.MoveNoteToFolder(note, folder);
+    }
+
+    private void AllNotes_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Properties.ContainsKey("NoteItem")) return;
+        e.AcceptedOperation = DataPackageOperation.Move;
+        e.DragUIOverride.Caption = "Move to all notes";
+        e.DragUIOverride.IsCaptionVisible = true;
+    }
+
+    private void AllNotes_Drop(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Properties.TryGetValue("NoteItem", out var item)
+            && item is NoteItemViewModel note)
+            ViewModel.Notes.MoveNoteToFolder(note, null);
     }
 }

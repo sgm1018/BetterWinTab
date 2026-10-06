@@ -11,9 +11,14 @@ public partial class NotesViewModel : BaseViewModel
     private readonly NotesService _service;
 
     public ObservableCollection<NoteItemViewModel> Notes { get; } = new();
+    public ObservableCollection<NoteItemViewModel> VisibleNotes { get; } = new();
+    public ObservableCollection<NoteFolderItemViewModel> Folders { get; } = new();
 
     [ObservableProperty]
     private NoteItemViewModel? _selectedNote;
+
+    [ObservableProperty]
+    private NoteFolderItemViewModel? _selectedFolder;
 
     /// <summary>Raised when the note shown in the editor must change.</summary>
     public event Action<NoteItemViewModel?>? SelectedNoteChanged;
@@ -21,18 +26,23 @@ public partial class NotesViewModel : BaseViewModel
     /// <summary>Raised after creating a note so the view can focus the editor title.</summary>
     public event Action? FocusEditorRequested;
 
-    public bool HasNotes => Notes.Count > 0;
+    public bool HasNotes => VisibleNotes.Count > 0;
     public Visibility EditorVisibility => HasNotes ? Visibility.Visible : Visibility.Collapsed;
     public Visibility EmptyStateVisibility => HasNotes ? Visibility.Collapsed : Visibility.Visible;
-    public string NotesCountLabel => Notes.Count == 1 ? "1 note" : $"{Notes.Count} notes";
+    public string EmptyStateTitle => SelectedFolder == null ? "No notes yet" : "This folder is empty";
+    public string NotesCountLabel => VisibleNotes.Count == 1 ? "1 note" : $"{VisibleNotes.Count} notes";
+    public bool IsAllNotesSelected => SelectedFolder == null;
 
     public NotesViewModel(NotesService service)
     {
         _service = service;
         foreach (var note in _service.Notes)
             Notes.Add(new NoteItemViewModel(note));
+        foreach (var folder in _service.Folders)
+            Folders.Add(new NoteFolderItemViewModel(folder));
 
-        Notes.CollectionChanged += (_, _) =>
+        Notes.CollectionChanged += (_, _) => RefreshVisibleNotes();
+        VisibleNotes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNotes));
             OnPropertyChanged(nameof(EditorVisibility));
@@ -40,7 +50,15 @@ public partial class NotesViewModel : BaseViewModel
             OnPropertyChanged(nameof(NotesCountLabel));
         };
 
-        _selectedNote = Notes.FirstOrDefault();
+        RefreshVisibleNotes();
+        _selectedNote = VisibleNotes.FirstOrDefault();
+    }
+
+    partial void OnSelectedFolderChanged(NoteFolderItemViewModel? value)
+    {
+        OnPropertyChanged(nameof(IsAllNotesSelected));
+        OnPropertyChanged(nameof(EmptyStateTitle));
+        RefreshVisibleNotes();
     }
 
     partial void OnSelectedNoteChanged(NoteItemViewModel? value)
@@ -51,7 +69,7 @@ public partial class NotesViewModel : BaseViewModel
     [RelayCommand]
     public void NewNote()
     {
-        var note = new Note();
+        var note = new Note { FolderId = SelectedFolder?.Model.Id };
         _service.Insert(0, note);
         var vm = new NoteItemViewModel(note);
         Notes.Insert(0, vm);
@@ -69,6 +87,7 @@ public partial class NotesViewModel : BaseViewModel
             Title = string.IsNullOrWhiteSpace(source.Model.Title) ? "Untitled (copy)" : $"{source.Model.Title} (copy)",
             Html = source.Model.Html,
             Font = source.Model.Font,
+            FolderId = source.Model.FolderId,
         };
         _service.Insert(index + 1, copy);
         var vm = new NoteItemViewModel(copy);
@@ -78,32 +97,58 @@ public partial class NotesViewModel : BaseViewModel
 
     public void DeleteNote(NoteItemViewModel note)
     {
-        var index = Notes.IndexOf(note);
-        if (index < 0) return;
+        var index = VisibleNotes.IndexOf(note);
+        var notesIndex = Notes.IndexOf(note);
+        if (index < 0 || notesIndex < 0) return;
 
         var wasSelected = ReferenceEquals(SelectedNote, note);
         _service.Remove(note.Model.Id);
-        Notes.RemoveAt(index);
+        Notes.RemoveAt(notesIndex);
 
         if (wasSelected || SelectedNote == null)
         {
-            SelectedNote = Notes.Count == 0 ? null : Notes[Math.Min(index, Notes.Count - 1)];
-            if (Notes.Count == 0) SelectedNoteChanged?.Invoke(null);
+            SelectedNote = VisibleNotes.Count == 0 ? null : VisibleNotes[Math.Min(index, VisibleNotes.Count - 1)];
+            if (VisibleNotes.Count == 0) SelectedNoteChanged?.Invoke(null);
         }
+    }
+
+    public void CreateFolder(string name)
+    {
+        var folder = _service.CreateFolder(name);
+        var folderVm = new NoteFolderItemViewModel(folder);
+        Folders.Add(folderVm);
+        SelectedFolder = folderVm;
+    }
+
+    public void DeleteFolder(NoteFolderItemViewModel folder)
+    {
+        if (!Folders.Contains(folder) || !_service.DeleteFolder(folder.Model.Id)) return;
+        if (ReferenceEquals(SelectedFolder, folder))
+            SelectedFolder = null;
+        Folders.Remove(folder);
+    }
+
+    public void SelectAllNotes() => SelectedFolder = null;
+
+    public void MoveNoteToFolder(NoteItemViewModel note, NoteFolderItemViewModel? folder)
+    {
+        if (!Notes.Contains(note) || !_service.MoveToFolder(note.Model.Id, folder?.Model.Id)) return;
+        note.Model.FolderId = folder?.Model.Id;
+        RefreshVisibleNotes();
     }
 
     public void SelectNextNote()
     {
-        if (Notes.Count == 0) return;
-        var idx = SelectedNote == null ? -1 : Notes.IndexOf(SelectedNote);
-        SelectedNote = Notes[(idx + 1) % Notes.Count];
+        if (VisibleNotes.Count == 0) return;
+        var idx = SelectedNote == null ? -1 : VisibleNotes.IndexOf(SelectedNote);
+        SelectedNote = VisibleNotes[(idx + 1) % VisibleNotes.Count];
     }
 
     public void SelectPreviousNote()
     {
-        if (Notes.Count == 0) return;
-        var idx = SelectedNote == null ? 0 : Notes.IndexOf(SelectedNote);
-        SelectedNote = Notes[(idx - 1 + Notes.Count) % Notes.Count];
+        if (VisibleNotes.Count == 0) return;
+        var idx = SelectedNote == null ? 0 : VisibleNotes.IndexOf(SelectedNote);
+        SelectedNote = VisibleNotes[(idx - 1 + VisibleNotes.Count) % VisibleNotes.Count];
     }
 
     /// <summary>Applies content sent by the editor (title, HTML, font, plain-text preview).</summary>
@@ -118,6 +163,21 @@ public partial class NotesViewModel : BaseViewModel
     public void RefreshTimestamps()
     {
         foreach (var note in Notes) note.RefreshUpdatedLabel();
+    }
+
+    private void RefreshVisibleNotes()
+    {
+        var previousSelection = SelectedNote;
+        var folderId = SelectedFolder?.Model.Id;
+        var visible = Notes.Where(note => note.Model.FolderId == folderId).ToList();
+        VisibleNotes.Clear();
+        foreach (var note in visible)
+            VisibleNotes.Add(note);
+
+        if (previousSelection != null && VisibleNotes.Contains(previousSelection))
+            SelectedNote = previousSelection;
+        else
+            SelectedNote = VisibleNotes.FirstOrDefault();
     }
 
     public void Flush() => _service.Flush();

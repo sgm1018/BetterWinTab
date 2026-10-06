@@ -53,6 +53,7 @@
         title.textContent = msg.title || '';
         editor.replaceChildren(NE.sanitize(msg.html || '', true));
         NE.ensureStructure();
+        disableNativeImageDragging();
         NE.setFont(msg.font || 'handwritten', false);
         const editable = state.noteId ? 'true' : 'false';
         title.contentEditable = editable;
@@ -312,13 +313,112 @@
             const paragraph = table.parentElement;
             if (paragraph.childNodes.length === 1) paragraph.replaceWith(table);
         });
+        disableNativeImageDragging();
         NE.ensureStructure();
         NE.ensureTrailingParagraph();
         updatePlaceholder();
         changed();
     }
 
-    // Only accept drags that start inside the editor; external drops go through the sanitizer.
+    function disableNativeImageDragging() {
+        editor.querySelectorAll('img').forEach(image => { image.draggable = false; });
+    }
+
+    function caretRangeAtPoint(x, y) {
+        const range = document.caretRangeFromPoint?.(x, y);
+        if (range && editor.contains(range.commonAncestorContainer)) return range;
+
+        const position = document.caretPositionFromPoint?.(x, y);
+        if (position && editor.contains(position.offsetNode)) {
+            const caret = document.createRange();
+            caret.setStart(position.offsetNode, position.offset);
+            caret.collapse(true);
+            return caret;
+        }
+
+        const blocks = Array.from(editor.children);
+        if (blocks.length === 0) return null;
+        const target = blocks.find(block => y <= block.getBoundingClientRect().bottom) || blocks[blocks.length - 1];
+        const caret = document.createRange();
+        caret.selectNode(target);
+        caret.collapse(y > target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2);
+        return caret;
+    }
+
+    function moveImageToPoint(image, x, y) {
+        const range = caretRangeAtPoint(x, y);
+        if (!range) return;
+
+        if (range.intersectsNode(image)) {
+            const rect = image.getBoundingClientRect();
+            range.selectNode(image);
+            range.collapse(y > rect.top + rect.height / 2);
+        }
+
+        const sourceBlock = image.parentElement;
+        image.remove();
+        range.insertNode(image);
+        if (sourceBlock?.parentElement === editor &&
+            NE.isEmptyBlock(sourceBlock) &&
+            editor.childElementCount > 1)
+            sourceBlock.remove();
+
+        const caret = document.createRange();
+        caret.setStartAfter(image);
+        caret.collapse(true);
+        editor.focus();
+        NE.selectRange(caret);
+        afterPaste();
+    }
+
+    let imagePointerDrag = null;
+
+    function clearImagePointerDrag() {
+        if (!imagePointerDrag) return;
+        imagePointerDrag.image.classList.remove('pointer-dragging');
+        document.body.classList.remove('image-dragging');
+        imagePointerDrag = null;
+    }
+
+    editor.addEventListener('pointerdown', e => {
+        if (e.button !== 0 || e.pointerType === 'touch') return;
+        const image = e.target instanceof Element ? e.target.closest('img') : null;
+        if (!image || !editor.contains(image)) return;
+
+        e.preventDefault();
+        imagePointerDrag = {
+            image,
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            dragging: false,
+        };
+    });
+
+    document.addEventListener('pointermove', e => {
+        if (!imagePointerDrag || e.pointerId !== imagePointerDrag.pointerId) return;
+        const drag = imagePointerDrag;
+        if (!drag.dragging && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 5) return;
+
+        drag.dragging = true;
+        drag.image.classList.add('pointer-dragging');
+        document.body.classList.add('image-dragging');
+        e.preventDefault();
+    }, true);
+
+    document.addEventListener('pointerup', e => {
+        if (!imagePointerDrag || e.pointerId !== imagePointerDrag.pointerId) return;
+        const drag = imagePointerDrag;
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        if (drag.dragging && state.noteId && target && editor.contains(target))
+            moveImageToPoint(drag.image, e.clientX, e.clientY);
+        clearImagePointerDrag();
+    }, true);
+
+    document.addEventListener('pointercancel', clearImagePointerDrag, true);
+    window.addEventListener('blur', clearImagePointerDrag);
+
+    // External drops go through the sanitizer; native internal text drags stay unchanged.
     let internalDrag = false;
     editor.addEventListener('dragstart', () => { internalDrag = true; });
     document.addEventListener('dragend', () => { internalDrag = false; });
@@ -341,7 +441,7 @@
         if (html) exec('insertHTML', NE.sanitizeToHtml(html, false));
         else if (text) exec('insertText', text);
         afterPaste();
-    });
+    }, true);
 
     editor.addEventListener('blur', () => {
         setTimeout(() => {

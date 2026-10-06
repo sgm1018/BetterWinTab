@@ -124,7 +124,13 @@ body.font-mono        { --font-body: var(--font-mono);        --body-size: 15px;
     height: auto;
     margin: 6px 0;
     border-radius: 6px;
+    cursor: grab;
+    -webkit-user-drag: none;
+    user-select: none;
 }
+#editor img:active { cursor: grabbing; }
+body.image-dragging { cursor: grabbing; }
+#editor img.pointer-dragging { opacity: .35; }
 
 #editor > *:first-child { margin-top: 0; }
 

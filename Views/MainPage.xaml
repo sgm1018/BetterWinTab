@@ -1463,7 +1463,7 @@
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center">
                                         <FontIcon
-                                            Glyph="&#xE8A5;"
+                                            Glyph="{x:Bind FallbackGlyph}"
                                             FontSize="20"
                                             Foreground="{StaticResource NeonGreenDimBrush}"
                                             HorizontalAlignment="Center"

@@ -234,6 +234,7 @@ public sealed partial class MainPage : Page
     {
         // Clear any leftover search from last session
         ViewModel.ClearSearch();
+        ViewModel.WarmUpLaunchSources();
         ViewModel.RequestBrowserTabsRefresh();
         ViewModel.RefreshWindows();
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>

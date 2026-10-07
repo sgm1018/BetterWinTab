@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -16,12 +17,13 @@ public partial class LaunchItemViewModel : ObservableObject
     public LaunchItem Model { get; }
 
     public string Name => Model.Name;
-    public string ItemTypeLabel => "APP";
+    public bool IsFolder => Model.Kind == LaunchItemKind.Folder;
+    public string ItemTypeLabel => IsFolder ? "FOLDER" : "APP";
+    public string FallbackGlyph => IsFolder ? "\uE8B7" : "\uE8A5";
 
     /// <summary>
-    /// Short friendly path shown under the app name.
-    /// Shows "Start Menu" for shortcuts that live in the Start Menu folders, 
-    /// otherwise shows just the parent folder name.
+    /// Short friendly path shown under the item name.
+    /// Apps: "Start Menu" or the Start Menu sub-folder. Folders: the parent folder's full path.
     /// </summary>
     public string FriendlyPath { get; }
 
@@ -31,10 +33,16 @@ public partial class LaunchItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _iconLoaded;
 
+    // Icons are cached as PNG bytes so re-typing a query doesn't hit the Shell again.
+    private static readonly ConcurrentDictionary<string, byte[]> IconCache = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxCachedIcons = 512;
+
     public LaunchItemViewModel(LaunchItem model)
     {
         Model = model;
-        FriendlyPath = BuildFriendlyPath(model.ShortcutPath);
+        FriendlyPath = IsFolder
+            ? Path.GetDirectoryName(model.ShortcutPath.TrimEnd('\\')) ?? model.ShortcutPath
+            : BuildFriendlyPath(model.ShortcutPath);
         _ = LoadIconAsync();
     }
 
@@ -44,10 +52,17 @@ public partial class LaunchItemViewModel : ObservableObject
     {
         try
         {
-            // Run the GDI/Shell work off the UI thread
-            var stream = await Task.Run(() => ExtractIconStream(Model.ShortcutPath));
-            if (stream == null) return;
+            if (!IconCache.TryGetValue(Model.ShortcutPath, out var png))
+            {
+                // Run the GDI/Shell work off the UI thread
+                png = await Task.Run(() => ExtractIconPng(Model.ShortcutPath));
+                if (png == null) return;
+                if (IconCache.Count >= MaxCachedIcons)
+                    IconCache.Clear();
+                IconCache[Model.ShortcutPath] = png;
+            }
 
+            using var stream = new System.IO.MemoryStream(png);
             var bitmap = new BitmapImage();
             await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
             Icon = bitmap;
@@ -57,11 +72,11 @@ public partial class LaunchItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Calls SHGetFileInfo to get the HICON of the shortcut's target, then converts
-    /// it to a PNG MemoryStream via System.Drawing.
+    /// Calls SHGetFileInfo to get the HICON of the shortcut's target (or folder), then converts
+    /// it to PNG bytes via System.Drawing.
     /// Must be called off the UI thread.
     /// </summary>
-    private static System.IO.MemoryStream? ExtractIconStream(string lnkPath)
+    private static byte[]? ExtractIconPng(string lnkPath)
     {
         var shfi = new NativeMethods.SHFILEINFO();
         var hr = NativeMethods.SHGetFileInfo(
@@ -77,10 +92,9 @@ public partial class LaunchItemViewModel : ObservableObject
             using var icon = System.Drawing.Icon.FromHandle(shfi.hIcon);
             using var bmp  = icon.ToBitmap();
 
-            var ms = new System.IO.MemoryStream();
+            using var ms = new System.IO.MemoryStream();
             bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            ms.Position = 0;
-            return ms;
+            return ms.ToArray();
         }
         finally
         {

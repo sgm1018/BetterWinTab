@@ -103,7 +103,8 @@ namespace BetterWinTab
             ServiceContainer.RegisterSingleton(() => new BrowserTabService(
                 ServiceContainer.Resolve<BrowserTabBridgeService>()));
             ServiceContainer.RegisterSingleton(() => new FolderService(ServiceContainer.Resolve<WindowEnumerationService>()));
-            ServiceContainer.RegisterSingleton(() => new LaunchService());
+            ServiceContainer.RegisterSingleton(() => new FolderIndexService());
+            ServiceContainer.RegisterSingleton(() => new LaunchService(ServiceContainer.Resolve<FolderIndexService>()));
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
             ServiceContainer.RegisterSingleton(() => new ClipboardService());
             ServiceContainer.RegisterSingleton(() => new NotesService());

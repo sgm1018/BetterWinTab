@@ -260,10 +260,15 @@ public static partial class NativeMethods
     public const uint SHGFI_LARGEICON      = 0x000000000;
     public const uint SHGFI_LINKOVERLAY    = 0x000008000; // add shortcut overlay
     public const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
+    public const uint SHGFI_DISPLAYNAME    = 0x000000200;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes,
         ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern int SHGetKnownFolderPath(
+        [MarshalAs(UnmanagedType.LPStruct)] Guid rfid, uint dwFlags, IntPtr hToken, out IntPtr ppszPath);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

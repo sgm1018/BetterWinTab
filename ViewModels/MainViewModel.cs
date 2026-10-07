@@ -451,6 +451,7 @@ public partial class MainViewModel : BaseViewModel
         Settings.ClipboardEnabledChanged += OnClipboardEnabledChanged;
         Settings.BrowserTabsChanged += RefreshWindows;
         _browserTabBridgeService.TabsChanged += OnBrowserTabsChanged;
+        _launchService.SourcesChanged += OnLaunchSourcesChanged;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
         Notes = new NotesViewModel(ServiceContainer.Resolve<NotesService>());
 
@@ -699,10 +700,7 @@ public partial class MainViewModel : BaseViewModel
             SelectedWindow = null;
             HasNoWindows = Visibility.Visible;
 
-            LaunchResults.Clear();
-            foreach (var item in _launchService.Search(q))
-                LaunchResults.Add(new LaunchItemViewModel(item));
-            SelectedLaunchItem = LaunchResults.Count > 0 ? LaunchResults[0] : null;
+            PopulateLaunchResults(q, preserveSelection: false);
 
             OnPropertyChanged(nameof(ShowEmptyDefault));
             OnPropertyChanged(nameof(ShowLaunchSuggestions));
@@ -748,16 +746,14 @@ public partial class MainViewModel : BaseViewModel
         SelectedWindow = Windows.Count > 0 ? Windows[0] : null;
         HasNoWindows = Windows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Populate launch suggestions when there are no matching windows
-        LaunchResults.Clear();
+        // Populate launch suggestions (apps + folders) when there are no matching windows
         if (Windows.Count == 0 && !string.IsNullOrEmpty(q))
         {
-            foreach (var item in _launchService.Search(q))
-                LaunchResults.Add(new LaunchItemViewModel(item));
-            SelectedLaunchItem = LaunchResults.Count > 0 ? LaunchResults[0] : null;
+            PopulateLaunchResults(q, preserveSelection: false);
         }
         else
         {
+            LaunchResults.Clear();
             SelectedLaunchItem = null;
         }
 
@@ -799,6 +795,59 @@ public partial class MainViewModel : BaseViewModel
     {
         _dispatcherQueue?.TryEnqueue(RefreshWindows);
     }
+
+    private void PopulateLaunchResults(string query, bool preserveSelection)
+    {
+        var results = _launchService.Search(query);
+
+        // Background refreshes that don't change anything must not rebuild the list (avoids icon flicker).
+        if (preserveSelection && results.Select(r => r.ShortcutPath)
+                .SequenceEqual(LaunchResults.Select(r => r.Model.ShortcutPath), StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var previousPath = preserveSelection ? SelectedLaunchItem?.Model.ShortcutPath : null;
+
+        LaunchResults.Clear();
+        foreach (var item in results)
+            LaunchResults.Add(new LaunchItemViewModel(item));
+
+        SelectedLaunchItem =
+            LaunchResults.FirstOrDefault(i => previousPath != null &&
+                string.Equals(i.Model.ShortcutPath, previousPath, StringComparison.OrdinalIgnoreCase))
+            ?? LaunchResults.FirstOrDefault();
+    }
+
+    private int _launchSourcesRefreshPending;
+
+    /// <summary>
+    /// The folder index / app cache finished (re)loading in the background: refresh the
+    /// visible launcher suggestions so results appear without retyping.
+    /// </summary>
+    private void OnLaunchSourcesChanged()
+    {
+        if (Interlocked.Exchange(ref _launchSourcesRefreshPending, 1) == 1)
+            return;
+
+        var enqueued = _dispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            Interlocked.Exchange(ref _launchSourcesRefreshPending, 0);
+
+            var q = SearchQuery.Trim();
+            if (string.IsNullOrEmpty(q) || (!_isAppSearchMode && Windows.Count > 0))
+                return;
+
+            PopulateLaunchResults(q, preserveSelection: true);
+            OnPropertyChanged(nameof(ShowEmptyDefault));
+            OnPropertyChanged(nameof(ShowLaunchSuggestions));
+            OnPropertyChanged(nameof(ShowRunFallback));
+        }) ?? false;
+
+        if (!enqueued)
+            Interlocked.Exchange(ref _launchSourcesRefreshPending, 0);
+    }
+
+    /// <summary>Called when the overlay is shown: keeps the app/folder search sources fresh.</summary>
+    public void WarmUpLaunchSources() => _launchService.WarmUp();
 
     private async Task ApplySemanticSearchAsync(
         string query,

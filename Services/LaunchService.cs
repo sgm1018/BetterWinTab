@@ -5,8 +5,9 @@ using BetterWinTab.Models;
 namespace BetterWinTab.Services;
 
 /// <summary>
-/// Enumerates installed apps from Start Menu shortcuts and provides
-/// a no-internet local launcher fallback for the search bar.
+/// Search-bar launcher: installed apps (Start Menu shortcuts) and folders on disk
+/// (via <see cref="FolderIndexService"/>). Used when no window/tab matches the query
+/// and in "Apps" search mode.
 /// </summary>
 public class LaunchService
 {
@@ -19,31 +20,62 @@ public class LaunchService
             @"Microsoft\Windows\Start Menu\Programs"),
     ];
 
-    // Cache built lazily on first search
-    private List<LaunchItem>? _cache;
+    // Apps are slightly preferred over folders with the same match quality.
+    private const int AppBoost = 300;
+
+    private readonly FolderIndexService _folderIndex;
+    private readonly object _cacheLock = new();
+
+    // Cache built lazily (or by WarmUp) — item plus its normalized search key
+    private List<(LaunchItem Item, string Key)>? _cache;
+
+    /// <summary>Raised (on a background thread) when new results may be available, e.g. the folder index was updated.</summary>
+    public event Action? SourcesChanged;
+
+    public LaunchService(FolderIndexService folderIndex)
+    {
+        _folderIndex = folderIndex;
+        _folderIndex.IndexChanged += () => SourcesChanged?.Invoke();
+        WarmUp();
+    }
 
     // ── Public API ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns up to <paramref name="maxResults"/> items whose names contain the query.
-    /// Exact prefix matches are sorted first.
+    /// Builds the app cache in the background and refreshes the folder index if it is stale,
+    /// so typing in the search bar never waits on disk access.
     /// </summary>
-    public IReadOnlyList<LaunchItem> Search(string query, int maxResults = 8)
+    public void WarmUp()
+    {
+        _ = Task.Run(EnsureCache);
+        _folderIndex.EnsureFresh();
+    }
+
+    /// <summary>
+    /// Returns up to <paramref name="maxResults"/> apps and folders whose names match the query,
+    /// best matches first (exact &gt; prefix &gt; word start &gt; substring).
+    /// </summary>
+    public IReadOnlyList<LaunchItem> Search(string query, int maxResults = 10)
     {
         if (string.IsNullOrWhiteSpace(query))
             return [];
 
-        var all = EnsureCache();
-        var q = query.Trim();
+        var q = FolderIndexService.NormalizeKey(query.Trim());
 
-        var startsWith = all
-            .Where(i => i.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase));
+        var apps = EnsureCache()
+            .Select(app => (app.Item, Score: FolderIndexService.ScoreName(app.Key, q)))
+            .Where(app => app.Score > int.MinValue)
+            .Select(app => (app.Item, Score: app.Score + AppBoost));
 
-        var contains = all
-            .Where(i => !i.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)
-                        && i.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+        var folders = _folderIndex.Search(query, maxResults)
+            .Select(folder => (Item: new LaunchItem(folder.Name, folder.Path, LaunchItemKind.Folder), folder.Score));
 
-        return startsWith.Concat(contains).Take(maxResults).ToList();
+        return apps.Concat(folders)
+            .OrderByDescending(result => result.Score)
+            .ThenBy(result => result.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(maxResults)
+            .Select(result => result.Item)
+            .ToList();
     }
 
     /// <summary>
@@ -86,48 +118,56 @@ public class LaunchService
     /// Clears the cached shortcut list so it is rebuilt on the next search.
     /// Call this if apps are installed/uninstalled at runtime.
     /// </summary>
-    public void InvalidateCache() => _cache = null;
+    public void InvalidateCache()
+    {
+        lock (_cacheLock)
+            _cache = null;
+    }
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private List<LaunchItem> EnsureCache()
+    private List<(LaunchItem Item, string Key)> EnsureCache()
     {
-        if (_cache != null)
-            return _cache;
-
-        var items = new List<LaunchItem>();
-
-        foreach (var root in StartMenuRoots)
+        lock (_cacheLock)
         {
-            if (!Directory.Exists(root))
-                continue;
+            if (_cache != null)
+                return _cache;
 
-            try
+            var items = new List<LaunchItem>();
+
+            foreach (var root in StartMenuRoots)
             {
-                foreach (var lnk in Directory.EnumerateFiles(root, "*.lnk", SearchOption.AllDirectories))
+                if (!Directory.Exists(root))
+                    continue;
+
+                try
                 {
-                    var name = Path.GetFileNameWithoutExtension(lnk);
-                    if (string.IsNullOrWhiteSpace(name))
-                        continue;
+                    foreach (var lnk in Directory.EnumerateFiles(root, "*.lnk", SearchOption.AllDirectories))
+                    {
+                        var name = Path.GetFileNameWithoutExtension(lnk);
+                        if (string.IsNullOrWhiteSpace(name))
+                            continue;
 
-                    // Skip noise entries typically found in Start Menu
-                    if (IsNoiseEntry(name))
-                        continue;
+                        // Skip noise entries typically found in Start Menu
+                        if (IsNoiseEntry(name))
+                            continue;
 
-                    items.Add(new LaunchItem(name, lnk));
+                        items.Add(new LaunchItem(name, lnk));
+                    }
                 }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaunchService.EnsureCache: {ex.Message}"); }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaunchService.EnsureCache: {ex.Message}"); }
+
+            // De-duplicate by name (keep first occurrence — user Start Menu wins)
+            _cache = items
+                .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(i => (i, FolderIndexService.NormalizeKey(i.Name)))
+                .ToList();
+
+            return _cache;
         }
-
-        // De-duplicate by name (keep first occurrence — user Start Menu wins)
-        _cache = items
-            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return _cache;
     }
 
     private static readonly string[] _noiseKeywords =

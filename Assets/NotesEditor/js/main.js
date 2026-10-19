@@ -101,7 +101,18 @@
         switch (msg.type) {
             case 'load': load(msg); break;
             case 'theme': applyTheme(msg); break;
-            case 'flush': flush(); break;
+            case 'flush':
+                flush();
+                if (msg.requestId) {
+                    title.contentEditable = 'false';
+                    editor.contentEditable = 'false';
+                    NE.post({ type: 'flushed', requestId: msg.requestId });
+                }
+                break;
+            case 'resume':
+                title.contentEditable = state.noteId ? 'true' : 'false';
+                editor.contentEditable = state.noteId ? 'true' : 'false';
+                break;
             case 'focus': focusTarget(msg.target); break;
         }
     }

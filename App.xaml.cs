@@ -182,7 +182,10 @@ namespace BetterWinTab
             try
             {
                 if (_window?.Content is Frame frame && frame.Content is Views.MainPage page)
+                {
+                    page.StopNotesBridge();
                     page.OnOverlayHidden();
+                }
             }
             catch
             {

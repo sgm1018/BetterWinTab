@@ -1,0 +1,12 @@
+{
+  "name": "betterwintab-local",
+  "interface": { "displayName": "BetterWinTab Local" },
+  "plugins": [
+    {
+      "name": "betterwintab-notes",
+      "source": { "source": "local", "path": "./betterwintab-notes" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

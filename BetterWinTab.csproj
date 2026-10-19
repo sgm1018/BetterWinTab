@@ -50,6 +50,7 @@
     <ItemGroup>
         <None Remove="BetterWinTab.slnx" />
         <Compile Remove="BrowserExtension\**\*.cs" />
+        <Compile Remove="NotesPlugin\**\*.cs" />
         <EmbeddedResource Remove="BrowserExtension\**\*" />
         <None Remove="BrowserExtension\**\*" />
     </ItemGroup>

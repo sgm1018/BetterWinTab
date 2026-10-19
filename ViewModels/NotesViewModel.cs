@@ -165,6 +165,20 @@ public partial class NotesViewModel : BaseViewModel
         foreach (var note in Notes) note.RefreshUpdatedLabel();
     }
 
+    /// <summary>Reflect an integration edit without changing the user's current selection.</summary>
+    public void ApplyExternalChange(Note note, bool created)
+    {
+        if (created)
+            Notes.Insert(0, new NoteItemViewModel(note));
+        else
+        {
+            var vm = Notes.FirstOrDefault(n => n.Model.Id == note.Id);
+            vm?.ApplyModelChanges();
+            RefreshVisibleNotes();
+            if (ReferenceEquals(SelectedNote, vm)) SelectedNoteChanged?.Invoke(vm);
+        }
+    }
+
     private void RefreshVisibleNotes()
     {
         var previousSelection = SelectedNote;

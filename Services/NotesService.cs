@@ -11,12 +11,9 @@ namespace BetterWinTab.Services;
 /// </summary>
 public class NotesService : IDisposable
 {
-    private static readonly string NotesDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "BetterWinTab");
-
-    private static readonly string NotesPath = Path.Combine(NotesDir, "notes.json");
-    private static readonly string FoldersPath = Path.Combine(NotesDir, "notes-folders.json");
+    private readonly string NotesDir;
+    private readonly string NotesPath;
+    private readonly string FoldersPath;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,8 +30,12 @@ public class NotesService : IDisposable
     private readonly Timer _saveTimer;
     private bool _dirty;
 
-    public NotesService()
+    public NotesService(string? storageDirectory = null)
     {
+        NotesDir = storageDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BetterWinTab");
+        NotesPath = Path.Combine(NotesDir, "notes.json");
+        FoldersPath = Path.Combine(NotesDir, "notes-folders.json");
         _saveTimer = new Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
         LoadFolders();
         Load();
@@ -196,6 +197,13 @@ public class NotesService : IDisposable
 
     /// <summary>Writes pending changes to disk immediately.</summary>
     public void Flush()
+        => FlushCore(throwOnError: false);
+
+    /// <summary>Used by integrations that must confirm that the write succeeded.</summary>
+    public void FlushOrThrow()
+        => FlushCore(throwOnError: true);
+
+    private void FlushCore(bool throwOnError)
     {
         lock (_writeLock)
         {
@@ -221,6 +229,7 @@ public class NotesService : IDisposable
             {
                 System.Diagnostics.Debug.WriteLine($"NotesService.Flush: {ex.Message}");
                 lock (_sync) _dirty = true;
+                if (throwOnError) throw;
             }
         }
     }

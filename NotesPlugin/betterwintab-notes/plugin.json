@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "betterwintab-notes",
+  "version": "0.1.1",
+  "description": "Busca, crea y modifica notas en la app local BetterWinTab.",
+  "author": { "name": "BetterWinTab" },
+  "keywords": ["betterwintab", "notas", "notes"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "BetterWinTab Notes",
+        "shortDescription": "Crea y modifica tus notas",
+        "longDescription": "Gestiona tus notas locales de BetterWinTab desde Codex. Busca, lee, crea y actualiza notas y consulta sus carpetas. Requiere BetterWinTab abierto en Windows y Node.js 22 o posterior.",
+        "developerName": "BetterWinTab",
+        "category": "Productivity",
+        "capabilities": ["Read", "Write"],
+        "defaultPrompt": ["Crea una nota en BetterWinTab", "Busca una nota en BetterWinTab", "Añade texto a una de mis notas"]
+      }
+    }
+  }
+}

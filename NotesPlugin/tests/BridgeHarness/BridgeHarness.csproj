@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../Models/Note.cs" Link="Note.cs" />
+    <Compile Include="../../../Models/NoteFolder.cs" Link="NoteFolder.cs" />
+    <Compile Include="../../../Services/NotesService.cs" Link="NotesService.cs" />
+    <Compile Include="../../../Services/NotesBridgeCommands.cs" Link="NotesBridgeCommands.cs" />
+    <Compile Include="../../../Services/NotesBridgeService.cs" Link="NotesBridgeService.cs" />
+  </ItemGroup>
+</Project>

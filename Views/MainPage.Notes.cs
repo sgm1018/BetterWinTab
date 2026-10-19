@@ -19,9 +19,40 @@ public sealed partial class MainPage
     private bool _notesEditorReady;
     private string? _pendingNotesFocus;
     private bool _isNotesFolderDialogOpen;
+    private NotesBridgeService? _notesBridge;
+    private TaskCompletionSource<bool>? _bridgeEditorFlushed;
+    private string? _bridgeFlushId;
 
     private void InitializeNotesPanel()
     {
+        var commands = new NotesBridgeCommands(ServiceContainer.Resolve<NotesService>(), ViewModel.Notes.ApplyExternalChange);
+        _notesBridge = new NotesBridgeService(request =>
+        {
+            var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    if (_notesEditorReady && NotesWebView.CoreWebView2 != null)
+                    {
+                        _bridgeFlushId = Guid.NewGuid().ToString("N");
+                        _bridgeEditorFlushed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        NotesWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "flush", requestId = _bridgeFlushId }));
+                        await _bridgeEditorFlushed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                    }
+                    completion.TrySetResult(commands.Execute(request));
+                }
+                catch (Exception ex) { completion.TrySetException(ex); }
+                finally
+                {
+                    _bridgeFlushId = null;
+                    _bridgeEditorFlushed = null;
+                    if (_notesEditorReady)
+                        NotesWebView.CoreWebView2?.PostWebMessageAsJson("{\"type\":\"resume\"}");
+                }
+            })) completion.TrySetException(new InvalidOperationException("BetterWinTab is closing."));
+            return completion.Task;
+        });
         ViewModel.Notes.SelectedNoteChanged += SendNoteToEditor;
         ViewModel.Notes.FocusEditorRequested += () => RequestEditorFocus("title");
         ViewModel.Settings.AppearanceChanged += SendThemeToEditor;
@@ -135,6 +166,10 @@ public sealed partial class MainPage
                     ViewModel.Notes.ApplyEditorChange(Str("id"), Str("title"), Str("html"), Str("font"), Str("preview"));
                     break;
 
+                case "flushed":
+                    if (Str("requestId") == _bridgeFlushId) _bridgeEditorFlushed?.TrySetResult(true);
+                    break;
+
                 case "newNote":
                     ViewModel.Notes.NewNote();
                     break;
@@ -212,6 +247,8 @@ public sealed partial class MainPage
             NotesWebView.CoreWebView2?.PostWebMessageAsJson("{\"type\":\"flush\"}");
         ViewModel.Notes.Flush();
     }
+
+    public void StopNotesBridge() => _notesBridge?.Dispose();
 
     private bool IsNotesEditorFocused()
     {

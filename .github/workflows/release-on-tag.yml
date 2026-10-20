@@ -52,6 +52,19 @@ jobs:
           "installer_path=installer-output/BetterWinTab-Setup-$version-x64.exe" >> $env:GITHUB_OUTPUT
           "portable_zip=installer-output/BetterWinTab-$version-win-x64-portable.zip" >> $env:GITHUB_OUTPUT
 
+      - name: Generate release changelog
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        id: changelog
+        shell: pwsh
+        run: |
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          ./scripts/New-ReleaseChangelog.ps1 `
+            -Tag "${{ steps.version.outputs.tag }}" `
+            -Version "${{ steps.version.outputs.version }}" `
+            -OutputPath $notesPath
+
+          "notes_path=$notesPath" >> $env:GITHUB_OUTPUT
+
       - name: Setup .NET 8
         if: steps.validate_tag.outputs.is_main_tag == 'true'
         uses: actions/setup-dotnet@v4
@@ -147,6 +160,7 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           $installer = "${{ steps.version.outputs.installer_path }}"
           $portableZip = "${{ steps.version.outputs.portable_zip }}"
+          $notesFile = "${{ steps.changelog.outputs.notes_path }}"
 
           if (-not (Test-Path $installer)) {
             throw "Installer not found at $installer"
@@ -159,6 +173,14 @@ jobs:
           gh release view $tag *> $null
 
           if ($LASTEXITCODE -eq 0) {
+            gh release edit $tag `
+              --title "BetterWinTab $tag" `
+              --notes-file $notesFile
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update release notes for $tag"
+            }
+
             gh release upload $tag `
               $installer `
               $portableZip `
@@ -169,7 +191,11 @@ jobs:
               $installer `
               $portableZip `
               --title "BetterWinTab $tag" `
-              --notes "Automated release for $tag"
+              --notes-file $notesFile
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create release for $tag"
+            }
           }
 
       - name: Skip non-main tag

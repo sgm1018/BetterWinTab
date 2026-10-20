@@ -39,6 +39,9 @@ public partial class MainViewModel : BaseViewModel
     public ObservableCollection<LaunchItemViewModel> LaunchResults { get; } = new();
     public ObservableCollection<ClipboardItem> ClipboardHistory => _clipboardService.History;
     public ObservableCollection<ClipboardItem> PinnedClipboardItems { get; } = new();
+    public ObservableCollection<ClipboardItem> FilteredClipboardHistory { get; } = new();
+    public ObservableCollection<ClipboardItem> FilteredPinnedClipboardItems { get; } = new();
+    public ObservableCollection<FolderSuggestion> FolderSuggestions { get; } = new();
 
     /// <summary>
     /// Fired after the Windows collection is refreshed (folder change, manual refresh, etc.).
@@ -292,14 +295,16 @@ public partial class MainViewModel : BaseViewModel
     public bool IsClipboardFolderSelected => SelectedFolder?.Model?.Type == FolderType.Clipboard;
 
     /// <summary>Clipboard folder visibility helper.</summary>
-    public Visibility ClipboardPanelVisibility => IsClipboardFolderSelected ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ClipboardPanelVisibility => IsClipboardFolderSelected || _searchFilter == SearchFilter.Clipboard ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>True when the Notes folder is selected (shows the notes editor instead of windows).</summary>
     public bool IsNotesFolderSelected => SelectedFolder?.Model?.Type == FolderType.Notes;
-    public Visibility NotesPanelVisibility => IsNotesFolderSelected ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility NotesPanelVisibility => IsNotesFolderSelected || _searchFilter == SearchFilter.Notes ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility WindowGridVisibility =>
-        IsClipboardFolderSelected || IsNotesFolderSelected ? Visibility.Collapsed : Visibility.Visible;
+        IsClipboardFolderSelected || IsNotesFolderSelected || _searchFilter is SearchFilter.Clipboard or SearchFilter.Notes
+            ? Visibility.Collapsed
+            : Visibility.Visible;
 
     // ── Smart Rules folder creation/editing ──
 
@@ -338,18 +343,51 @@ public partial class MainViewModel : BaseViewModel
     [NotifyPropertyChangedFor(nameof(SearchClearVisibility))]
     private string _searchQuery = string.Empty;
 
-    private bool _isAppSearchMode;
-    public bool IsAppSearchMode => _isAppSearchMode;
-    public string SearchModeLabel => _isAppSearchMode ? "Apps" : "All";
+    private SearchFilter _searchFilter = SearchFilter.All;
+    private bool _changingSearchFilter;
+    public bool IsAppSearchMode => _searchFilter == SearchFilter.Apps;
+    public string SearchModeLabel => _searchFilter.ToString();
 
     public void SetAppSearchMode(bool enabled)
+        => SetSearchFilter(enabled ? SearchFilter.Apps : SearchFilter.All);
+
+    public void SetSearchFilter(SearchFilter filter)
     {
-        _isAppSearchMode = enabled;
+        if (_searchFilter == filter) return;
+
+        CancelSemanticSearch();
+        _folderBeforeSearch = null;
+        _searchFilter = filter;
         OnPropertyChanged(nameof(IsAppSearchMode));
         OnPropertyChanged(nameof(SearchModeLabel));
+        OnPropertyChanged(nameof(SearchResultCount));
+        OnPropertyChanged(nameof(SearchClearVisibility));
         OnPropertyChanged(nameof(ShowLaunchSuggestions));
         OnPropertyChanged(nameof(ShowEmptyDefault));
+        OnPropertyChanged(nameof(ShowAppSearchPrompt));
         OnPropertyChanged(nameof(WindowGridVisibility));
+        OnPropertyChanged(nameof(ClipboardPanelVisibility));
+        OnPropertyChanged(nameof(NotesPanelVisibility));
+
+        var targetFolder = filter switch
+        {
+            SearchFilter.Notes => NotesFolderVM,
+            SearchFilter.Clipboard => ClipboardFolderVM,
+            _ when IsClipboardFolderSelected || IsNotesFolderSelected => Folders.FirstOrDefault(),
+            _ => null
+        };
+        if (targetFolder != null && !ReferenceEquals(SelectedFolder, targetFolder))
+        {
+            _changingSearchFilter = true;
+            SelectedFolder = targetFolder;
+            _changingSearchFilter = false;
+        }
+
+        if (filter == SearchFilter.Notes)
+            Notes.ApplyQuickSearch(SearchQuery);
+        else if (filter == SearchFilter.Clipboard)
+            RefreshFilteredClipboard();
+
         ApplySearchFilter();
     }
 
@@ -358,12 +396,39 @@ public partial class MainViewModel : BaseViewModel
 
     public bool IsSearchActive => !string.IsNullOrEmpty(SearchQuery);
     public Visibility SearchClearVisibility => IsSearchActive ? Visibility.Visible : Visibility.Collapsed;
-    public string SearchResultCount => IsSearchActive ? $"{Windows.Count} result{(Windows.Count == 1 ? "" : "s")}" : string.Empty;
+    public string SearchResultCount
+    {
+        get
+        {
+            if (!IsSearchActive) return string.Empty;
+            var count = _searchFilter switch
+            {
+                SearchFilter.Apps => LaunchResults.Count,
+                SearchFilter.Notes => Notes.VisibleNotes.Count,
+                SearchFilter.Clipboard => FilteredClipboardHistory.Count,
+                _ => Windows.Count
+            };
+            return $"{count} result{(count == 1 ? "" : "s")}";
+        }
+    }
 
     // Launch panel visibility helpers
-    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && !_isAppSearchMode && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility ShowLaunchSuggestions => IsSearchActive && Windows.Count == 0 && LaunchResults.Count > 0 && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility ShowRunFallback       => IsSearchActive && Windows.Count == 0 && LaunchResults.Count == 0 && !_isAppSearchMode && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && _searchFilter != SearchFilter.Apps && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowLaunchSuggestions =>
+        (_searchFilter is SearchFilter.All or SearchFilter.Apps) && IsSearchActive &&
+        Windows.Count == 0 && LaunchResults.Count > 0 && !ShowRecycleBinSuggestion
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    public Visibility ShowRunFallback       => IsSearchActive && Windows.Count == 0 && LaunchResults.Count == 0 && _searchFilter == SearchFilter.All && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowAppSearchPrompt => _searchFilter == SearchFilter.Apps && !IsSearchActive ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowNoWindowMatches =>
+        IsSearchActive && Windows.Count == 0 && _searchFilter is (SearchFilter.Windows or SearchFilter.Tabs)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    public Visibility FolderSuggestionsVisibility =>
+        _searchFilter == SearchFilter.All && !IsSearchActive && SelectedFolder?.Model.Type == FolderType.All && FolderSuggestions.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     [ObservableProperty]
     private bool _showRecycleBinSuggestion;
@@ -438,6 +503,7 @@ public partial class MainViewModel : BaseViewModel
         _browserTabBridgeService = ServiceContainer.Resolve<BrowserTabBridgeService>();
         _settingsService = ServiceContainer.Resolve<SettingsService>();
         _settings = _settingsService.Load();
+        _settings.ItemUsage ??= new Dictionary<string, ItemUsage>(StringComparer.OrdinalIgnoreCase);
         _folderService = ServiceContainer.Resolve<FolderService>();
         _launchService = ServiceContainer.Resolve<LaunchService>();
         _virtualDesktopService = ServiceContainer.Resolve<VirtualDesktopService>();
@@ -454,6 +520,8 @@ public partial class MainViewModel : BaseViewModel
         _launchService.SourcesChanged += OnLaunchSourcesChanged;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
         Notes = new NotesViewModel(ServiceContainer.Resolve<NotesService>());
+        ClipboardHistory.CollectionChanged += (_, _) => RefreshFilteredClipboard();
+        PinnedClipboardItems.CollectionChanged += (_, _) => RefreshFilteredClipboard();
 
         Title = "BetterWinTab";
 
@@ -542,6 +610,21 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedFolderChanged(FolderItemViewModel? value)
     {
+        if (!_changingSearchFilter && value?.Model?.Type is FolderType.Notes or FolderType.Clipboard)
+        {
+            _searchFilter = value.Model.Type == FolderType.Notes ? SearchFilter.Notes : SearchFilter.Clipboard;
+            OnPropertyChanged(nameof(IsAppSearchMode));
+            OnPropertyChanged(nameof(SearchModeLabel));
+        }
+        else if (!_changingSearchFilter
+                 && _searchFilter is SearchFilter.Notes or SearchFilter.Clipboard
+                 && value?.Model?.Type is not (FolderType.Notes or FolderType.Clipboard))
+        {
+            _searchFilter = SearchFilter.All;
+            OnPropertyChanged(nameof(IsAppSearchMode));
+            OnPropertyChanged(nameof(SearchModeLabel));
+        }
+
         // Keep the ListView selection in sync — but only when the newly selected
         // folder is a regular (non-clipboard) one.  If clipboard is selected, clear
         // the ListView highlight without triggering the reverse write-back.
@@ -557,9 +640,12 @@ public partial class MainViewModel : BaseViewModel
         if (value != null)
         {
             // If the user manually switches folder, discard the saved "before search" folder
-            _folderBeforeSearch = null;
-            // Clear search when switching folders so we see all windows in the new folder
-            SearchQuery = string.Empty;
+            if (!_changingSearchFilter)
+            {
+                _folderBeforeSearch = null;
+                // Clear search when switching folders so we see all windows in the new folder
+                SearchQuery = string.Empty;
+            }
             RefreshWindows();
         }
 
@@ -570,6 +656,7 @@ public partial class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(WindowGridVisibility));
         OnPropertyChanged(nameof(ClipboardFolderIsSelected));
         OnPropertyChanged(nameof(RecycleBinFolderIsSelected));
+        OnPropertyChanged(nameof(FolderSuggestionsVisibility));
         NotifyNotesSelectionChanged();
     }
 
@@ -672,6 +759,8 @@ public partial class MainViewModel : BaseViewModel
                 _cachedFolderWindows.AddRange(_browserTabService.GetTabs(_settings.BrowserTabs));
         }
 
+        UpdateFolderSuggestions(allFolder?.Windows ?? []);
+
         // WindowInfo objects are shared references across folders, so they
         // already carry DesktopId / IsOnCurrentDesktop / DesktopNumber
         // from the all-windows enrichment pass above.
@@ -684,6 +773,44 @@ public partial class MainViewModel : BaseViewModel
 
     public void RequestBrowserTabsRefresh() => _browserTabBridgeService.RequestTabsRefresh();
 
+    private void UpdateFolderSuggestions(IEnumerable<WindowInfo> windows)
+    {
+        FolderSuggestions.Clear();
+
+        var candidates = windows
+            .GroupBy(window => window.ProcessName, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var unmatched = group.Where(window => !IsCoveredBySmartFolder(window)).ToList();
+                if (unmatched.Count == 0) return null;
+                var sample = unmatched.OrderByDescending(window => window.LastActiveTime).First();
+                return new FolderSuggestion(group.Key, unmatched.Count, sample.Title);
+            })
+            .Where(suggestion => suggestion != null)
+            .OrderByDescending(suggestion => suggestion!.WindowCount)
+            .Take(3)
+            .ToList();
+
+        foreach (var suggestion in candidates)
+            FolderSuggestions.Add(suggestion!);
+
+        OnPropertyChanged(nameof(FolderSuggestionsVisibility));
+    }
+
+    private bool IsCoveredBySmartFolder(WindowInfo window) => _folderService.Folders.Any(folder => folder.Type switch
+    {
+        FolderType.SmartProcess => string.Equals(folder.ProcessFilter, window.ProcessName, StringComparison.OrdinalIgnoreCase),
+        FolderType.SmartClass => string.Equals(folder.ClassNameFilter, window.ClassName, StringComparison.OrdinalIgnoreCase),
+        FolderType.SmartRules => folder.Rules?.Matches(window) == true,
+        _ => false
+    });
+
+    public void CreateSmartFolderFromSuggestion(FolderSuggestion suggestion)
+    {
+        if (suggestion == null) return;
+        CreateSmartFolderFromProcess(suggestion.ProcessName);
+    }
+
     /// <summary>
     /// Filters the Windows collection from the folder cache using the current SearchQuery.
     /// Uses fuzzy matching with fallback to exact substring for typo tolerance.
@@ -694,27 +821,64 @@ public partial class MainViewModel : BaseViewModel
 
         ShowRecycleBinSuggestion = RecycleBinMatcher.Matches(q);
 
-        if (_isAppSearchMode && !string.IsNullOrEmpty(q))
+        if (_searchFilter == SearchFilter.Notes)
         {
+            CancelSemanticSearch();
             Windows.Clear();
+            LaunchResults.Clear();
             SelectedWindow = null;
-            HasNoWindows = Visibility.Visible;
-
-            PopulateLaunchResults(q, preserveSelection: false);
-
-            OnPropertyChanged(nameof(ShowEmptyDefault));
-            OnPropertyChanged(nameof(ShowLaunchSuggestions));
-            OnPropertyChanged(nameof(ShowRunFallback));
-            OnPropertyChanged(nameof(RunFallbackLabel));
-            OnPropertyChanged(nameof(SearchResultCount));
+            HasNoWindows = Visibility.Collapsed;
+            Notes.ApplyQuickSearch(q);
+            NotifySearchStateChanged();
             WindowsRefreshed?.Invoke();
             return;
         }
 
+        if (_searchFilter == SearchFilter.Clipboard)
+        {
+            CancelSemanticSearch();
+            Windows.Clear();
+            LaunchResults.Clear();
+            SelectedWindow = null;
+            HasNoWindows = Visibility.Collapsed;
+            RefreshFilteredClipboard();
+            NotifySearchStateChanged();
+            WindowsRefreshed?.Invoke();
+            return;
+        }
+
+        if (_searchFilter == SearchFilter.Apps)
+        {
+            CancelSemanticSearch();
+            Windows.Clear();
+            SelectedWindow = null;
+            HasNoWindows = Visibility.Visible;
+            if (!string.IsNullOrEmpty(q))
+                PopulateLaunchResults(q, preserveSelection: false);
+            else
+            {
+                LaunchResults.Clear();
+                SelectedLaunchItem = null;
+            }
+
+            NotifySearchStateChanged();
+            WindowsRefreshed?.Invoke();
+            return;
+        }
+
+        var filteredByType = _searchFilter switch
+        {
+            SearchFilter.Windows => _cachedFolderWindows.Where(window => !window.IsBrowserTab).ToList(),
+            SearchFilter.Tabs => _cachedFolderWindows.Where(window => window.IsBrowserTab).ToList(),
+            _ => _cachedFolderWindows.ToList()
+        };
+
         List<WindowInfo> source;
         if (string.IsNullOrEmpty(q))
         {
-            source = _cachedFolderWindows;
+            source = filteredByType
+                .OrderByDescending(GetNoQueryPersonalizedScore)
+                .ToList();
         }
         else
         {
@@ -722,15 +886,15 @@ public partial class MainViewModel : BaseViewModel
             // Multi-word token matching: each space-separated word must match at least
             // one of: Title or ProcessName. ClassName is excluded because many Electron
             // apps share Chrome_WidgetWin_1, causing false positives.
-            source = _cachedFolderWindows
+            source = filteredByType
                 .Select(w =>
                 {
                     var (matched, score) = FuzzyMatcher.MultiWordMatch(
                         new[] { w.Title, w.ProcessName }, q);
-                    return (window: w, matched, score);
+                    return (window: w, matched, score, rank: GetPersonalizedMatchScore(w, score));
                 })
                 .Where(x => x.matched)
-                .OrderByDescending(x => x.score)
+                .OrderByDescending(x => x.rank)
                 .Select(x => x.window)
                 .ToList();
         }
@@ -747,7 +911,7 @@ public partial class MainViewModel : BaseViewModel
         HasNoWindows = Windows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // Populate launch suggestions (apps + folders) when there are no matching windows
-        if (Windows.Count == 0 && !string.IsNullOrEmpty(q))
+        if (Windows.Count == 0 && !string.IsNullOrEmpty(q) && _searchFilter == SearchFilter.All)
         {
             PopulateLaunchResults(q, preserveSelection: false);
         }
@@ -757,11 +921,7 @@ public partial class MainViewModel : BaseViewModel
             SelectedLaunchItem = null;
         }
 
-        OnPropertyChanged(nameof(ShowEmptyDefault));
-        OnPropertyChanged(nameof(ShowLaunchSuggestions));
-        OnPropertyChanged(nameof(ShowRunFallback));
-        OnPropertyChanged(nameof(RunFallbackLabel));
-        OnPropertyChanged(nameof(SearchResultCount));
+        NotifySearchStateChanged();
 
         // Notify listeners (View) to re-register DWM thumbnails
         WindowsRefreshed?.Invoke();
@@ -769,16 +929,103 @@ public partial class MainViewModel : BaseViewModel
         StartSemanticSearch(q, source);
     }
 
+    private void NotifySearchStateChanged()
+    {
+        OnPropertyChanged(nameof(ShowEmptyDefault));
+        OnPropertyChanged(nameof(ShowLaunchSuggestions));
+        OnPropertyChanged(nameof(ShowRunFallback));
+        OnPropertyChanged(nameof(ShowNoWindowMatches));
+        OnPropertyChanged(nameof(ShowAppSearchPrompt));
+        OnPropertyChanged(nameof(RunFallbackLabel));
+        OnPropertyChanged(nameof(SearchResultCount));
+        OnPropertyChanged(nameof(FolderSuggestionsVisibility));
+    }
+
+    private void RefreshFilteredClipboard()
+    {
+        var query = SearchQuery.Trim();
+        FilteredClipboardHistory.Clear();
+        FilteredPinnedClipboardItems.Clear();
+
+        foreach (var item in ClipboardHistory.Where(item => MatchesClipboardItem(item, query)))
+            FilteredClipboardHistory.Add(item);
+        foreach (var item in PinnedClipboardItems.Where(item => MatchesClipboardItem(item, query)))
+            FilteredPinnedClipboardItems.Add(item);
+
+        OnPropertyChanged(nameof(SearchResultCount));
+    }
+
+    private static bool MatchesClipboardItem(ClipboardItem item, string query) =>
+        string.IsNullOrWhiteSpace(query)
+        || (item.IsImage ? "image picture" : item.Text ?? string.Empty)
+            .Contains(query, StringComparison.OrdinalIgnoreCase);
+
+    private double GetNoQueryPersonalizedScore(WindowInfo window)
+    {
+        var usage = GetUsageBoost(GetWindowUsageId(window));
+        var recentActivity = Math.Clamp((DateTime.Now - window.LastActiveTime).TotalDays, 0, 30);
+        var activityScore = Math.Exp(-recentActivity / 3.0);
+        return usage * 0.8 + activityScore * 0.2;
+    }
+
+    private double GetPersonalizedMatchScore(WindowInfo window, int lexicalScore)
+    {
+        var lexical = lexicalScore >= 1000
+            ? Math.Clamp(0.78 + (lexicalScore - 1000) / 2000.0, 0.78, 1.0)
+            : Math.Clamp(lexicalScore / 400.0, 0, 0.77);
+        return lexical * 0.82 + GetUsageBoost(GetWindowUsageId(window)) * 0.18;
+    }
+
+    private double GetUsageBoost(string usageId)
+    {
+        if (!_settings.ItemUsage.TryGetValue(usageId, out var usage)) return 0;
+
+        var days = Math.Max(0, (DateTime.UtcNow - usage.LastUsedUtc).TotalDays);
+        var recency = Math.Exp(-days / 14.0);
+        var frequency = Math.Min(1, Math.Log2(usage.UseCount + 1) / 6.0);
+        return recency * 0.7 + frequency * 0.3;
+    }
+
+    private static string GetWindowUsageId(WindowInfo window)
+    {
+        if (window.IsBrowserTab)
+        {
+            var host = Uri.TryCreate(window.Url, UriKind.Absolute, out var uri) ? uri.Host : string.Empty;
+            return $"tab|{window.BrowserName}|{host}|{window.Title}".ToLowerInvariant();
+        }
+
+        return $"window|{window.ProcessName}|{window.Title}".ToLowerInvariant();
+    }
+
+    private static string GetLaunchUsageId(LaunchItem item) => $"launch|{item.ShortcutPath}".ToLowerInvariant();
+
+    private void RecordUsage(string usageId)
+    {
+        if (!_settings.ItemUsage.TryGetValue(usageId, out var usage))
+        {
+            usage = new ItemUsage();
+            _settings.ItemUsage[usageId] = usage;
+        }
+
+        usage.UseCount++;
+        usage.LastUsedUtc = DateTime.UtcNow;
+
+        if (_settings.ItemUsage.Count > 1000)
+        {
+            foreach (var oldKey in _settings.ItemUsage
+                         .OrderBy(pair => pair.Value.LastUsedUtc)
+                         .Take(_settings.ItemUsage.Count - 800)
+                         .Select(pair => pair.Key)
+                         .ToList())
+                _settings.ItemUsage.Remove(oldKey);
+        }
+
+        SaveSettings();
+    }
+
     private void StartSemanticSearch(string query, IReadOnlyList<WindowInfo> candidates)
     {
-        CancellationTokenSource? previousCancellation;
-        lock (_semanticSearchSync)
-        {
-            previousCancellation = _semanticSearchCancellation;
-            _semanticSearchCancellation = null;
-            previousCancellation?.Cancel();
-            previousCancellation?.Dispose();
-        }
+        CancelSemanticSearch();
 
         if (string.IsNullOrEmpty(query) || candidates.Count == 0 ||
             SemanticEmbeddingsLoading || SemanticEmbeddingsStatus.Length > 0)
@@ -791,6 +1038,21 @@ public partial class MainViewModel : BaseViewModel
         _ = ApplySemanticSearchAsync(query, candidates.ToList(), generation, cancellation.Token);
     }
 
+    private void CancelSemanticSearch()
+    {
+        CancellationTokenSource? previousCancellation;
+        lock (_semanticSearchSync)
+        {
+            previousCancellation = _semanticSearchCancellation;
+            _semanticSearchCancellation = null;
+            previousCancellation?.Cancel();
+            previousCancellation?.Dispose();
+        }
+
+        // Invalidate results already queued on the UI dispatcher.
+        _semanticSearchGeneration++;
+    }
+
     private void OnBrowserTabsChanged()
     {
         _dispatcherQueue?.TryEnqueue(RefreshWindows);
@@ -798,7 +1060,17 @@ public partial class MainViewModel : BaseViewModel
 
     private void PopulateLaunchResults(string query, bool preserveSelection)
     {
-        var results = _launchService.Search(query);
+        var sourceResults = _launchService.Search(query);
+        var results = sourceResults
+            .Select((item, index) => new
+            {
+                Item = item,
+                Rank = (index == 0 ? 1.0 : 1.0 - (double)index / Math.Max(1, sourceResults.Count)) * 0.82
+                    + GetUsageBoost(GetLaunchUsageId(item)) * 0.18
+            })
+            .OrderByDescending(result => result.Rank)
+            .Select(result => result.Item)
+            .ToList();
 
         // Background refreshes that don't change anything must not rebuild the list (avoids icon flicker).
         if (preserveSelection && results.Select(r => r.ShortcutPath)
@@ -833,7 +1105,9 @@ public partial class MainViewModel : BaseViewModel
             Interlocked.Exchange(ref _launchSourcesRefreshPending, 0);
 
             var q = SearchQuery.Trim();
-            if (string.IsNullOrEmpty(q) || (!_isAppSearchMode && Windows.Count > 0))
+            if (string.IsNullOrEmpty(q) ||
+                (_searchFilter is not (SearchFilter.All or SearchFilter.Apps)) ||
+                (!IsAppSearchMode && Windows.Count > 0))
                 return;
 
             PopulateLaunchResults(q, preserveSelection: true);
@@ -879,7 +1153,7 @@ public partial class MainViewModel : BaseViewModel
 
             _semanticSearchService.Replace(records);
             var rankedIds = _semanticSearchService.Search(queryEmbedding, records.Count)
-                .Select(result => result.Record.Id)
+                .Select(result => (result.Record.Id, result.Score))
                 .ToList();
 
             _dispatcherQueue?.TryEnqueue(() =>
@@ -889,8 +1163,17 @@ public partial class MainViewModel : BaseViewModel
 
                 var windowsById = candidates.ToDictionary(GetSemanticId, StringComparer.Ordinal);
                 var ranked = rankedIds
-                    .Where(windowsById.ContainsKey)
-                    .Select(id => windowsById[id])
+                    .Where(result => windowsById.ContainsKey(result.Id))
+                    .Select(result =>
+                    {
+                        var window = windowsById[result.Id];
+                        var (_, lexicalScore) = FuzzyMatcher.MultiWordMatch(new[] { window.Title, window.ProcessName }, query);
+                        var rank = result.Score * 0.65 + GetPersonalizedMatchScore(window, lexicalScore) * 0.35;
+                        return (window, rank);
+                    })
+                    .OrderByDescending(result => result.window.IsPinned)
+                    .ThenByDescending(result => result.rank)
+                    .Select(result => result.window)
                     .ToList();
 
                 Windows.Clear();
@@ -927,11 +1210,18 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSearchQueryChanged(string value)
     {
-        if (string.IsNullOrEmpty(value))
+        if (_searchFilter == SearchFilter.Notes || _searchFilter == SearchFilter.Clipboard)
         {
-            _isAppSearchMode = false;
+            ApplySearchFilter();
+            return;
+        }
+
+        if (string.IsNullOrEmpty(value) && _searchFilter == SearchFilter.Apps)
+        {
+            _searchFilter = SearchFilter.All;
             OnPropertyChanged(nameof(IsAppSearchMode));
             OnPropertyChanged(nameof(SearchModeLabel));
+            OnPropertyChanged(nameof(ShowAppSearchPrompt));
         }
 
         if (!string.IsNullOrEmpty(value))
@@ -968,9 +1258,13 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     public void ClearSearch()
     {
-        _isAppSearchMode = false;
-        OnPropertyChanged(nameof(IsAppSearchMode));
-        OnPropertyChanged(nameof(SearchModeLabel));
+        if (_searchFilter == SearchFilter.Apps)
+        {
+            _searchFilter = SearchFilter.All;
+            OnPropertyChanged(nameof(IsAppSearchMode));
+            OnPropertyChanged(nameof(SearchModeLabel));
+            OnPropertyChanged(nameof(ShowAppSearchPrompt));
+        }
         SearchQuery = string.Empty;
 
         // Restore the folder that was selected before searching
@@ -1016,7 +1310,10 @@ public partial class MainViewModel : BaseViewModel
     public void LaunchOrRun()
     {
         if (SelectedLaunchItem != null)
+        {
+            RecordUsage(GetLaunchUsageId(SelectedLaunchItem.Model));
             _launchService.Launch(SelectedLaunchItem.Model);
+        }
         else if (IsSearchActive)
             _launchService.RunQuery(SearchQuery);
     }
@@ -1043,6 +1340,8 @@ public partial class MainViewModel : BaseViewModel
     public void SwitchToWindow()
     {
         if (SelectedWindow == null) return;
+
+        RecordUsage(GetWindowUsageId(SelectedWindow.Model));
 
         var handle = SelectedWindow.Model.Handle;
 
@@ -1228,9 +1527,9 @@ public partial class MainViewModel : BaseViewModel
     /// </summary>
     public void NavigateClipboardDown()
     {
-        if (ClipboardHistory.Count == 0) return;
-        int idx = SelectedClipboardItem == null ? -1 : ClipboardHistory.IndexOf(SelectedClipboardItem);
-        SelectedClipboardItem = ClipboardHistory[(idx + 1) % ClipboardHistory.Count];
+        if (FilteredClipboardHistory.Count == 0) return;
+        int idx = SelectedClipboardItem == null ? -1 : FilteredClipboardHistory.IndexOf(SelectedClipboardItem);
+        SelectedClipboardItem = FilteredClipboardHistory[(idx + 1) % FilteredClipboardHistory.Count];
     }
 
     /// <summary>
@@ -1239,9 +1538,9 @@ public partial class MainViewModel : BaseViewModel
     /// </summary>
     public void NavigateClipboardUp()
     {
-        if (ClipboardHistory.Count == 0) return;
-        int idx = SelectedClipboardItem == null ? 0 : ClipboardHistory.IndexOf(SelectedClipboardItem);
-        SelectedClipboardItem = ClipboardHistory[(idx - 1 + ClipboardHistory.Count) % ClipboardHistory.Count];
+        if (FilteredClipboardHistory.Count == 0) return;
+        int idx = SelectedClipboardItem == null ? 0 : FilteredClipboardHistory.IndexOf(SelectedClipboardItem);
+        SelectedClipboardItem = FilteredClipboardHistory[(idx - 1 + FilteredClipboardHistory.Count) % FilteredClipboardHistory.Count];
     }
 
     /// <summary>

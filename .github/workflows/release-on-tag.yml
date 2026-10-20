@@ -86,6 +86,28 @@ jobs:
             -p:Version=${{ steps.version.outputs.version }} `
             -p:PublishProfile=win-x64.pubxml
 
+      - name: Publish Chromium native messaging host
+        if: steps.validate_tag.outputs.is_main_tag == 'true'
+        shell: pwsh
+        run: |
+          $publishDir = "${{ steps.version.outputs.publish_dir }}"
+          $nativeHostDir = Join-Path $publishDir 'BrowserExtension\NativeHost'
+          dotnet publish BrowserExtension\NativeHost\BetterWinTab.NativeHost.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o $nativeHostDir
+
+          if (-not (Test-Path (Join-Path $nativeHostDir 'BetterWinTab.NativeHost.exe'))) {
+            throw "Native messaging host was not published to $nativeHostDir"
+          }
+
+          if (-not (Test-Path (Join-Path $publishDir 'BrowserExtension\manifest.json'))) {
+            throw "Chromium extension manifest was not copied to $publishDir"
+          }
+
       - name: Build installer
         if: steps.validate_tag.outputs.is_main_tag == 'true'
         shell: pwsh

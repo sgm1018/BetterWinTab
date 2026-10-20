@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Net;
+using System.Text.RegularExpressions;
 
 namespace BetterWinTab.ViewModels;
 
@@ -9,6 +11,7 @@ namespace BetterWinTab.ViewModels;
 public partial class NotesViewModel : BaseViewModel
 {
     private readonly NotesService _service;
+    private string _quickSearchQuery = string.Empty;
 
     public ObservableCollection<NoteItemViewModel> Notes { get; } = new();
     public ObservableCollection<NoteItemViewModel> VisibleNotes { get; } = new();
@@ -130,6 +133,12 @@ public partial class NotesViewModel : BaseViewModel
 
     public void SelectAllNotes() => SelectedFolder = null;
 
+    public void ApplyQuickSearch(string query)
+    {
+        _quickSearchQuery = query.Trim();
+        RefreshVisibleNotes();
+    }
+
     public void MoveNoteToFolder(NoteItemViewModel note, NoteFolderItemViewModel? folder)
     {
         if (!Notes.Contains(note) || !_service.MoveToFolder(note.Model.Id, folder?.Model.Id)) return;
@@ -183,7 +192,9 @@ public partial class NotesViewModel : BaseViewModel
     {
         var previousSelection = SelectedNote;
         var folderId = SelectedFolder?.Model.Id;
-        var visible = Notes.Where(note => note.Model.FolderId == folderId).ToList();
+        var visible = Notes.Where(note => note.Model.FolderId == folderId)
+            .Where(MatchesQuickSearch)
+            .ToList();
         VisibleNotes.Clear();
         foreach (var note in visible)
             VisibleNotes.Add(note);
@@ -192,6 +203,16 @@ public partial class NotesViewModel : BaseViewModel
             SelectedNote = previousSelection;
         else
             SelectedNote = VisibleNotes.FirstOrDefault();
+    }
+
+    private bool MatchesQuickSearch(NoteItemViewModel note)
+    {
+        if (string.IsNullOrWhiteSpace(_quickSearchQuery)) return true;
+
+        var content = Regex.Replace(note.Model.Html ?? string.Empty, "<[^>]+>", " ");
+        content = WebUtility.HtmlDecode(content);
+        var searchable = $"{note.Model.Title} {note.Preview} {content}";
+        return searchable.Contains(_quickSearchQuery, StringComparison.OrdinalIgnoreCase);
     }
 
     public void Flush() => _service.Flush();

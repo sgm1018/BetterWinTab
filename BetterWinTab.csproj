@@ -45,6 +45,12 @@
         <Content Include="Assets\Wide310x150Logo.scale-200.png" />
         <!-- Notes editor (HTML/CSS/JS hosted in WebView2) -->
         <Content Include="Assets\NotesEditor\**\*" CopyToOutputDirectory="PreserveNewest" />
+        <!-- Chromium extension files are copied beside the app by the release workflow. -->
+        <Content Include="BrowserExtension\manifest.json;BrowserExtension\background.js">
+            <Link>BrowserExtension\%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
     </ItemGroup>
 
     <ItemGroup>

@@ -7,6 +7,73 @@ public sealed class BrowserNativeHostInstaller
 {
     private const string HostName = "com.betterwintab.tabs";
     private const string HostExecutableName = "BetterWinTab.NativeHost.exe";
+    private static readonly string InstallDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "BetterWinTab",
+        "NativeHost");
+
+    public bool IsHostAvailable => FindHostDirectory() != null;
+
+    public bool IsExtensionPackageAvailable
+    {
+        get
+        {
+            var directory = FindExtensionDirectory();
+            return directory != null
+                && File.Exists(Path.Combine(directory, "manifest.json"))
+                && File.Exists(Path.Combine(directory, "background.js"));
+        }
+    }
+
+    public string? ExtensionDirectory => FindExtensionDirectory();
+
+    public bool IsRegistered(string browser)
+    {
+        var registryPath = RegistryPathFor(browser);
+        if (registryPath == null) return false;
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(registryPath, false);
+            var manifestPath = key?.GetValue(null) as string;
+            if (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath)) return false;
+
+            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var hostPath = manifest.RootElement.TryGetProperty("path", out var path)
+                ? path.GetString()
+                : null;
+            return !string.IsNullOrWhiteSpace(hostPath) && File.Exists(hostPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public bool IsExtensionIdRegistered(string browser, string extensionId)
+    {
+        if (string.IsNullOrWhiteSpace(extensionId)) return false;
+        var registryPath = RegistryPathFor(browser);
+        if (registryPath == null) return false;
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(registryPath, false);
+            var manifestPath = key?.GetValue(null) as string;
+            if (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath)) return false;
+
+            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            return manifest.RootElement.TryGetProperty("allowed_origins", out var origins)
+                && origins.EnumerateArray().Any(origin => string.Equals(
+                    origin.GetString(),
+                    $"chrome-extension://{extensionId.Trim()}/",
+                    StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public string Install(IReadOnlyDictionary<string, string> extensionIds)
     {
@@ -25,19 +92,15 @@ public sealed class BrowserNativeHostInstaller
         if (sourceDirectory == null)
             return "Native host not found. Build BrowserExtension\\NativeHost in Release first.";
 
-        var installDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BetterWinTab",
-            "NativeHost");
-        Directory.CreateDirectory(installDirectory);
-        CopyHostFiles(sourceDirectory, installDirectory);
+        Directory.CreateDirectory(InstallDirectory);
+        CopyHostFiles(sourceDirectory, InstallDirectory);
 
-        var manifestPath = Path.Combine(installDirectory, $"{HostName}.json");
+        var manifestPath = Path.Combine(InstallDirectory, $"{HostName}.json");
         var manifest = new
         {
             name = HostName,
             description = "BetterWinTab Chromium tab bridge",
-            path = Path.Combine(installDirectory, HostExecutableName),
+            path = Path.Combine(InstallDirectory, HostExecutableName),
             type = "stdio",
             allowed_origins = validIds.Values
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -61,6 +124,14 @@ public sealed class BrowserNativeHostInstaller
         yield return $@"Software\Microsoft\Edge\NativeMessagingHosts\{HostName}";
         yield return $@"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\{HostName}";
     }
+
+    private static string? RegistryPathFor(string browser) => browser.ToLowerInvariant() switch
+    {
+        "chrome" => $@"Software\Google\Chrome\NativeMessagingHosts\{HostName}",
+        "edge" => $@"Software\Microsoft\Edge\NativeMessagingHosts\{HostName}",
+        "brave" => $@"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\{HostName}",
+        _ => null
+    };
 
     private static bool IsExtensionId(string value) =>
         value.Length == 32 && value.All(character => character is >= 'a' and <= 'p');
@@ -87,5 +158,20 @@ public sealed class BrowserNativeHostInstaller
 
         var installedDirectory = Path.Combine(AppContext.BaseDirectory, "BrowserExtension", "NativeHost");
         return File.Exists(Path.Combine(installedDirectory, HostExecutableName)) ? installedDirectory : null;
+    }
+
+    private static string? FindExtensionDirectory()
+    {
+        var packagedDirectory = Path.Combine(AppContext.BaseDirectory, "BrowserExtension");
+        if (File.Exists(Path.Combine(packagedDirectory, "manifest.json"))) return packagedDirectory;
+
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var index = 0; index < 10 && current != null; index++, current = current.Parent)
+        {
+            var sourceDirectory = Path.Combine(current.FullName, "BrowserExtension");
+            if (File.Exists(Path.Combine(sourceDirectory, "manifest.json"))) return sourceDirectory;
+        }
+
+        return null;
     }
 }

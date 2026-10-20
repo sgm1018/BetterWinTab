@@ -1328,10 +1328,17 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void SearchModeToggle_Click(object sender, RoutedEventArgs e)
+    private void SearchFilter_Click(object sender, RoutedEventArgs e)
     {
-        ViewModel.SetAppSearchMode(!ViewModel.IsAppSearchMode);
+        if (sender is MenuFlyoutItem item && Enum.TryParse<SearchFilter>(item.Tag?.ToString(), out var filter))
+            ViewModel.SetSearchFilter(filter);
         SearchBox.Focus(FocusState.Programmatic);
+    }
+
+    private void CreateSuggestedFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is FolderSuggestion suggestion)
+            ViewModel.CreateSmartFolderFromSuggestion(suggestion);
     }
 
     private void PinnedClipboardItem_Unpin(object sender, RoutedEventArgs e)

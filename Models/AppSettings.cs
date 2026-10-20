@@ -52,6 +52,9 @@ public class AppSettings
     /// </summary>
     public List<PinnedWindowId> PinnedWindows { get; set; } = new();
 
+    /// <summary>Local usage ranking used to personalize search results.</summary>
+    public Dictionary<string, ItemUsage> ItemUsage { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Maximum number of clipboard history items to keep.
     /// </summary>

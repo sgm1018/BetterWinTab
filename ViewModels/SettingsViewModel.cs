@@ -57,6 +57,13 @@ public partial class SettingsViewModel : BaseViewModel
     private string _settingsBraveExtensionId = string.Empty;
     [ObservableProperty]
     private string _browserIntegrationStatusText = string.Empty;
+    public string ChromeBrowserSetupStatus => GetBrowserSetupStatus("Chrome", SettingsChromeExtensionId);
+    public string EdgeBrowserSetupStatus => GetBrowserSetupStatus("Edge", SettingsEdgeExtensionId);
+    public string BraveBrowserSetupStatus => GetBrowserSetupStatus("Brave", SettingsBraveExtensionId);
+    public string BrowserExtensionFolderStatus => _browserNativeHostInstaller.IsExtensionPackageAvailable
+        ? $"Extension files found: {_browserNativeHostInstaller.ExtensionDirectory}"
+        : "Extension files are missing from this installation.";
+
     public string BrowserTabsStatusText
     {
         get
@@ -79,7 +86,95 @@ public partial class SettingsViewModel : BaseViewModel
 
     private void OnBrowserBridgeStatusChanged()
     {
-        _dispatcherQueue?.TryEnqueue(() => OnPropertyChanged(nameof(BrowserTabsStatusText)));
+        _dispatcherQueue?.TryEnqueue(() =>
+        {
+            OnPropertyChanged(nameof(BrowserTabsStatusText));
+            NotifyBrowserSetupStatuses();
+        });
+    }
+
+    private string GetBrowserSetupStatus(string browser, string extensionId)
+    {
+        if (_browserTabBridgeService?.GetHealthSummary().Contains(
+                $"{browser}: connected", StringComparison.OrdinalIgnoreCase) == true)
+            return "Ready — the extension is connected and tabs are arriving.";
+
+        if (!_browserNativeHostInstaller.IsExtensionPackageAvailable)
+            return "Setup files are missing. Reinstall BetterWinTab or download the extension package.";
+
+        if (!_browserNativeHostInstaller.IsHostAvailable)
+            return "Native host files are missing. Install BetterWinTab again to restore them.";
+
+        if (string.IsNullOrWhiteSpace(extensionId))
+            return "Step 1 — install the extension and copy its ID from the browser extensions page.";
+
+        if (extensionId.Trim().Length != 32 || extensionId.Trim().Any(character => character is < 'a' or > 'p'))
+            return "Step 1 — this extension ID is invalid. Copy the 32-character ID shown on the browser extensions page.";
+
+        if (!_browserNativeHostInstaller.IsRegistered(browser)
+            || !_browserNativeHostInstaller.IsExtensionIdRegistered(browser, extensionId))
+            return "Step 2 — this extension ID is not registered yet. Select Register integration below.";
+
+        return "Step 3 — reload the extension, restart this browser, then reopen BetterWinTab if needed.";
+    }
+
+    private void NotifyBrowserSetupStatuses()
+    {
+        OnPropertyChanged(nameof(ChromeBrowserSetupStatus));
+        OnPropertyChanged(nameof(EdgeBrowserSetupStatus));
+        OnPropertyChanged(nameof(BraveBrowserSetupStatus));
+        OnPropertyChanged(nameof(BrowserExtensionFolderStatus));
+    }
+
+    partial void OnSettingsChromeExtensionIdChanged(string value) => OnPropertyChanged(nameof(ChromeBrowserSetupStatus));
+    partial void OnSettingsEdgeExtensionIdChanged(string value) => OnPropertyChanged(nameof(EdgeBrowserSetupStatus));
+    partial void OnSettingsBraveExtensionIdChanged(string value) => OnPropertyChanged(nameof(BraveBrowserSetupStatus));
+
+    [RelayCommand]
+    private void OpenChromeExtensions() => OpenExtensionsPage("chrome://extensions");
+
+    [RelayCommand]
+    private void OpenEdgeExtensions() => OpenExtensionsPage("edge://extensions");
+
+    [RelayCommand]
+    private void OpenBraveExtensions() => OpenExtensionsPage("brave://extensions");
+
+    [RelayCommand]
+    private void OpenBrowserExtensionFolder()
+    {
+        var directory = _browserNativeHostInstaller.ExtensionDirectory;
+        if (directory == null)
+        {
+            BrowserIntegrationStatusText = "Extension folder is unavailable in this installation.";
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", directory)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            BrowserIntegrationStatusText = $"Could not open the extension folder: {ex.Message}";
+        }
+    }
+
+    private void OpenExtensionsPage(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            BrowserIntegrationStatusText = $"Could not open the browser extensions page: {ex.Message}";
+        }
     }
 
     public event Action? ClipboardEnabledChanged;
@@ -219,6 +314,7 @@ public partial class SettingsViewModel : BaseViewModel
         SettingsBraveExtensionId = _settings.BrowserTabs.BraveExtensionId;
         BrowserIntegrationStatusText = string.Empty;
         OnPropertyChanged(nameof(BrowserTabsStatusText));
+        NotifyBrowserSetupStatuses();
         ActiveSettingsTab = "General";
         IsSettingsPanelVisible = true;
     }
@@ -278,6 +374,7 @@ public partial class SettingsViewModel : BaseViewModel
         _settings.BrowserTabs.EdgeExtensionId = SettingsEdgeExtensionId.Trim();
         _settings.BrowserTabs.BraveExtensionId = SettingsBraveExtensionId.Trim();
         SaveSettings();
+        NotifyBrowserSetupStatuses();
     }
     private static int ParsePort(string value, int fallback) =>
         int.TryParse(value, out var port) && port is >= 1 and <= 65535 ? port : fallback;

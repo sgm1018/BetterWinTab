@@ -21,9 +21,11 @@ public class HotkeyService : IDisposable
     private uint _configuredVKey = NativeMethods.VK_TAB;
     private uint _configuredModifiers = 0x0002; // MOD_CONTROL
 
-    // Debounce: prevent rapid-fire toggles
-    private DateTime _lastToggle = DateTime.MinValue;
-    private static readonly TimeSpan ToggleCooldown = TimeSpan.FromMilliseconds(300);
+    // Low-level hook callbacks run before Windows updates the asynchronous key state.
+    // Track modifier transitions here and latch each hotkey press until its key-up so
+    // key-repeat cannot toggle repeatedly and quick taps are never dropped by a timer.
+    private readonly HashSet<uint> _pressedModifierKeys = new();
+    private bool _hotkeyKeyDown;
 
     public event Action? HotkeyPressed;
 
@@ -57,6 +59,18 @@ public class HotkeyService : IDisposable
     {
         _dispatcherQueue = dispatcherQueue;
 
+        foreach (uint key in new uint[]
+                 {
+                     NativeMethods.VK_LCONTROL, NativeMethods.VK_RCONTROL,
+                     0xA4, 0xA5, // VK_LMENU / VK_RMENU
+                     0xA0, 0xA1, // VK_LSHIFT / VK_RSHIFT
+                     0x5B, 0x5C  // VK_LWIN / VK_RWIN
+                 })
+        {
+            if (IsKeyDown((int)key))
+                _pressedModifierKeys.Add(key);
+        }
+
         // MUST keep a reference to prevent GC from collecting the delegate
         _hookProc = HookCallback;
 
@@ -79,19 +93,32 @@ public class HotkeyService : IDisposable
     /// </summary>
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && (wParam == (IntPtr)NativeMethods.WM_KEYDOWN || wParam == (IntPtr)NativeMethods.WM_SYSKEYDOWN))
+        if (nCode >= 0)
         {
             var hookStruct = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
+            bool isKeyDown = wParam == (IntPtr)NativeMethods.WM_KEYDOWN ||
+                             wParam == (IntPtr)NativeMethods.WM_SYSKEYDOWN;
+            bool isKeyUp = wParam == (IntPtr)NativeMethods.WM_KEYUP ||
+                           wParam == (IntPtr)NativeMethods.WM_SYSKEYUP;
+
+            if (isKeyDown || isKeyUp)
+                UpdateModifierState(hookStruct.vkCode, isKeyDown);
+
+            if (isKeyUp && hookStruct.vkCode == _configuredVKey && _hotkeyKeyDown)
+            {
+                _hotkeyKeyDown = false;
+                // Pair the consumed hotkey key-down with a consumed key-up.
+                return (IntPtr)1;
+            }
 
             // ── Configured hotkey (Ctrl+Tab by default) ──
-            if (hookStruct.vkCode == _configuredVKey)
+            if (isKeyDown && hookStruct.vkCode == _configuredVKey)
             {
                 if (CheckModifiers(_configuredModifiers))
                 {
-                    var now = DateTime.UtcNow;
-                    if (now - _lastToggle > ToggleCooldown)
+                    if (!_hotkeyKeyDown)
                     {
-                        _lastToggle = now;
+                        _hotkeyKeyDown = true;
                         _dispatcherQueue?.TryEnqueue(() => HotkeyPressed?.Invoke());
                     }
 
@@ -101,7 +128,7 @@ public class HotkeyService : IDisposable
             }
 
             // ── Hide overlay on Alt+Tab or Win+Tab (pass keystroke through to Windows) ──
-            if (hookStruct.vkCode == NativeMethods.VK_TAB)
+            if (isKeyDown && hookStruct.vkCode == NativeMethods.VK_TAB)
             {
                 bool isAltTab = wParam == (IntPtr)NativeMethods.WM_SYSKEYDOWN;
                 bool isWinTab = wParam == (IntPtr)NativeMethods.WM_KEYDOWN &&
@@ -121,19 +148,17 @@ public class HotkeyService : IDisposable
     /// <summary>
     /// Returns true when the modifier keys required by <paramref name="modifiers"/> are all pressed.
     /// </summary>
-    private static bool CheckModifiers(uint modifiers)
+    private bool CheckModifiers(uint modifiers)
     {
         bool needCtrl  = (modifiers & 0x0002) != 0;
         bool needAlt   = (modifiers & 0x0001) != 0;
         bool needShift = (modifiers & 0x0004) != 0;
         bool needWin   = (modifiers & 0x0008) != 0;
 
-        bool ctrlDown  = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LCONTROL) & 0x8000) != 0
-                      || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RCONTROL) & 0x8000) != 0;
-        bool altDown   = (NativeMethods.GetAsyncKeyState(0x12) & 0x8000) != 0; // VK_MENU
-        bool shiftDown = (NativeMethods.GetAsyncKeyState(0x10) & 0x8000) != 0; // VK_SHIFT
-        bool winDown   = (NativeMethods.GetAsyncKeyState(0x5B) & 0x8000) != 0  // VK_LWIN
-                      || (NativeMethods.GetAsyncKeyState(0x5C) & 0x8000) != 0; // VK_RWIN
+        bool ctrlDown = IsAnyModifierDown(NativeMethods.VK_LCONTROL, NativeMethods.VK_RCONTROL, 0x11);
+        bool altDown = IsAnyModifierDown(0xA4, 0xA5, 0x12);
+        bool shiftDown = IsAnyModifierDown(0xA0, 0xA1, 0x10);
+        bool winDown = IsAnyModifierDown(0x5B, 0x5C);
 
         if (needCtrl  && !ctrlDown)  return false;
         if (needAlt   && !altDown)   return false;
@@ -141,6 +166,24 @@ public class HotkeyService : IDisposable
         if (needWin   && !winDown)   return false;
         return true;
     }
+
+    private bool IsAnyModifierDown(params uint[] keys) => keys.Any(_pressedModifierKeys.Contains);
+
+    private void UpdateModifierState(uint key, bool isDown)
+    {
+        bool isModifier = key is NativeMethods.VK_LCONTROL or NativeMethods.VK_RCONTROL or 0x11 or
+            0xA0 or 0xA1 or 0x10 or 0xA4 or 0xA5 or 0x12 or 0x5B or 0x5C;
+        if (!isModifier)
+            return;
+
+        if (isDown)
+            _pressedModifierKeys.Add(key);
+        else
+            _pressedModifierKeys.Remove(key);
+    }
+
+    private static bool IsKeyDown(int key) =>
+        (NativeMethods.GetAsyncKeyState(key) & 0x8000) != 0;
 
     /// <summary>
     /// Removes the keyboard hook.

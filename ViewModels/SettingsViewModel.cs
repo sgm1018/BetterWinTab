@@ -723,5 +723,125 @@ public partial class SettingsViewModel : BaseViewModel
             TextMutedColor="#806070", DangerColor="#FF4400",
             FolderHoverColor="#1AFF6FA6", FolderSelectedColor="#29FF6FA6",
             WindowHoverBorderColor="#66FF6FA6", WindowHoverBackgroundColor="#0CFF6FA6" } },
+
+        new ThemePreset { Name = "Cool Blue", Appearance = new() {
+            AccentColor="#A9D8F5", AccentDimColor="#6AA9D2", AccentSubtleColor="#294D68",
+            BackgroundColor="#101923", SurfaceColor="#172330", CardColor="#1E2E3D",
+            BorderColor="#304657", TextPrimaryColor="#F0F7FC", TextSecondaryColor="#B5CCDC",
+            TextMutedColor="#7895AA", DangerColor="#FF647C",
+            FolderHoverColor="#1AA9D8F5", FolderSelectedColor="#29A9D8F5",
+            WindowHoverBorderColor="#66A9D8F5", WindowHoverBackgroundColor="#0CA9D8F5" } },
+
+        new ThemePreset { Name = "Jade Garden", Appearance = new() {
+            AccentColor="#65C7A5", AccentDimColor="#368F72", AccentSubtleColor="#174D3D",
+            BackgroundColor="#0C1714", SurfaceColor="#12221D", CardColor="#1A2E26",
+            BorderColor="#2B493C", TextPrimaryColor="#F0F8F2", TextSecondaryColor="#B2D4C1",
+            TextMutedColor="#789B86", DangerColor="#F06464",
+            FolderHoverColor="#1A65C7A5", FolderSelectedColor="#2965C7A5",
+            WindowHoverBorderColor="#6665C7A5", WindowHoverBackgroundColor="#0C65C7A5" } },
+
+        new ThemePreset { Name = "Plum Noir", Appearance = new() {
+            AccentColor="#D58AAE", AccentDimColor="#99536F", AccentSubtleColor="#51253D",
+            BackgroundColor="#160F16", SurfaceColor="#211722", CardColor="#2C1D2C",
+            BorderColor="#493044", TextPrimaryColor="#FAF0F5", TextSecondaryColor="#D4B5C6",
+            TextMutedColor="#9E7A8E", DangerColor="#FF685E",
+            FolderHoverColor="#1AD58AAE", FolderSelectedColor="#29D58AAE",
+            WindowHoverBorderColor="#66D58AAE", WindowHoverBackgroundColor="#0CD58AAE" } },
+
+        new ThemePreset { Name = "Wasabi Voltage", Appearance = new() {
+            AccentColor="#C6F542", AccentDimColor="#83A91C", AccentSubtleColor="#394A12",
+            BackgroundColor="#11150D", SurfaceColor="#1A2013", CardColor="#242C19",
+            BorderColor="#39452A", TextPrimaryColor="#F6F8EC", TextSecondaryColor="#D2DAB7",
+            TextMutedColor="#929E70", DangerColor="#FF665E",
+            FolderHoverColor="#1AC6F542", FolderSelectedColor="#29C6F542",
+            WindowHoverBorderColor="#66C6F542", WindowHoverBackgroundColor="#0CC6F542" } },
+
+        new ThemePreset { Name = "Persimmon Glow", Appearance = new() {
+            AccentColor="#FF7654", AccentDimColor="#C64C37", AccentSubtleColor="#5A251D",
+            BackgroundColor="#1A100F", SurfaceColor="#261715", CardColor="#34201B",
+            BorderColor="#503128", TextPrimaryColor="#FFF4EB", TextSecondaryColor="#E8B9A4",
+            TextMutedColor="#B17D69", DangerColor="#FF4D5A",
+            FolderHoverColor="#1AFF7654", FolderSelectedColor="#29FF7654",
+            WindowHoverBorderColor="#66FF7654", WindowHoverBackgroundColor="#0CFF7654" } },
+
+        new ThemePreset { Name = "Transformative Teal", Appearance = new() {
+            AccentColor="#54C6C2", AccentDimColor="#318D8A", AccentSubtleColor="#174D50",
+            BackgroundColor="#0D171A", SurfaceColor="#142226", CardColor="#1C2D31",
+            BorderColor="#30494D", TextPrimaryColor="#EFF8F6", TextSecondaryColor="#B2D4D1",
+            TextMutedColor="#779B9B", DangerColor="#FF6670",
+            FolderHoverColor="#1A54C6C2", FolderSelectedColor="#2954C6C2",
+            WindowHoverBorderColor="#6654C6C2", WindowHoverBackgroundColor="#0C54C6C2" } },
+
+        new ThemePreset { Name = "Cloud Dancer", Appearance = new() {
+            AccentColor="#A68B63", AccentDimColor="#80694B", AccentSubtleColor="#E4D8C5",
+            BackgroundColor="#F5F3EE", SurfaceColor="#ECE9E1", CardColor="#E3DFD5",
+            BorderColor="#D0CBBF", TextPrimaryColor="#282823", TextSecondaryColor="#57564E",
+            TextMutedColor="#79776D", DangerColor="#C84646",
+            FolderHoverColor="#1AA68B63", FolderSelectedColor="#29A68B63",
+            WindowHoverBorderColor="#66A68B63", WindowHoverBackgroundColor="#0CA68B63" } },
+
+        new ThemePreset { Name = "Phthalo Green", Appearance = new() {
+            AccentColor="#35B878", AccentDimColor="#238052", AccentSubtleColor="#123F2D",
+            BackgroundColor="#09120E", SurfaceColor="#101B15", CardColor="#17251C",
+            BorderColor="#294033", TextPrimaryColor="#F0F7F1", TextSecondaryColor="#B5D0BC",
+            TextMutedColor="#789882", DangerColor="#F05A58",
+            FolderHoverColor="#1A35B878", FolderSelectedColor="#2935B878",
+            WindowHoverBorderColor="#6635B878", WindowHoverBackgroundColor="#0C35B878" } },
+
+        new ThemePreset { Name = "Divine Damson", Appearance = new() {
+            AccentColor="#C8799C", AccentDimColor="#8F4D70", AccentSubtleColor="#4A263A",
+            BackgroundColor="#171018", SurfaceColor="#211722", CardColor="#2D1F2C",
+            BorderColor="#493044", TextPrimaryColor="#FAF2F6", TextSecondaryColor="#D5B7C7",
+            TextMutedColor="#9C7A8D", DangerColor="#FF665D",
+            FolderHoverColor="#1AC8799C", FolderSelectedColor="#29C8799C",
+            WindowHoverBorderColor="#66C8799C", WindowHoverBackgroundColor="#0CC8799C" } },
+
+        new ThemePreset { Name = "Hidden Gem", Appearance = new() {
+            AccentColor="#54B8AE", AccentDimColor="#377F78", AccentSubtleColor="#1D4846",
+            BackgroundColor="#101819", SurfaceColor="#172224", CardColor="#202D2E",
+            BorderColor="#354849", TextPrimaryColor="#F0F7F4", TextSecondaryColor="#B8D0CB",
+            TextMutedColor="#7F9D98", DangerColor="#F05F67",
+            FolderHoverColor="#1A54B8AE", FolderSelectedColor="#2954B8AE",
+            WindowHoverBorderColor="#6654B8AE", WindowHoverBackgroundColor="#0C54B8AE" } },
+
+        new ThemePreset { Name = "Cocoa & Clay", Appearance = new() {
+            AccentColor="#D99B78", AccentDimColor="#A86F52", AccentSubtleColor="#5A392B",
+            BackgroundColor="#1B1512", SurfaceColor="#28201B", CardColor="#352A23",
+            BorderColor="#504036", TextPrimaryColor="#FBF3E9", TextSecondaryColor="#DCC3AD",
+            TextMutedColor="#A88C76", DangerColor="#D94E4E",
+            FolderHoverColor="#1AD99B78", FolderSelectedColor="#29D99B78",
+            WindowHoverBorderColor="#66D99B78", WindowHoverBackgroundColor="#0CD99B78" } },
+
+        new ThemePreset { Name = "Botanical Night", Appearance = new() {
+            AccentColor="#A7C96B", AccentDimColor="#6D8D45", AccentSubtleColor="#344522",
+            BackgroundColor="#10150F", SurfaceColor="#191F16", CardColor="#222A1D",
+            BorderColor="#37432E", TextPrimaryColor="#F3F5EA", TextSecondaryColor="#C9D2B0",
+            TextMutedColor="#8F9B76", DangerColor="#EC5D58",
+            FolderHoverColor="#1AA7C96B", FolderSelectedColor="#29A7C96B",
+            WindowHoverBorderColor="#66A7C96B", WindowHoverBackgroundColor="#0CA7C96B" } },
+
+        new ThemePreset { Name = "Solar Amber", Appearance = new() {
+            AccentColor="#F4BC4F", AccentDimColor="#B98228", AccentSubtleColor="#543A16",
+            BackgroundColor="#17130B", SurfaceColor="#211A0E", CardColor="#2D2413",
+            BorderColor="#49391C", TextPrimaryColor="#FFF8E9", TextSecondaryColor="#E1C992",
+            TextMutedColor="#A8905E", DangerColor="#F05C55",
+            FolderHoverColor="#1AF4BC4F", FolderSelectedColor="#29F4BC4F",
+            WindowHoverBorderColor="#66F4BC4F", WindowHoverBackgroundColor="#0CF4BC4F" } },
+
+        new ThemePreset { Name = "Aero Current", Appearance = new() {
+            AccentColor="#57D5E8", AccentDimColor="#348EBB", AccentSubtleColor="#203F78",
+            BackgroundColor="#0B1221", SurfaceColor="#111D32", CardColor="#172843",
+            BorderColor="#293D5C", TextPrimaryColor="#F0F8FF", TextSecondaryColor="#B3CBE7",
+            TextMutedColor="#7896BD", DangerColor="#FF6176",
+            FolderHoverColor="#1A57D5E8", FolderSelectedColor="#2957D5E8",
+            WindowHoverBorderColor="#6657D5E8", WindowHoverBackgroundColor="#0C57D5E8" } },
+
+        new ThemePreset { Name = "Neo Nostalgia", Appearance = new() {
+            AccentColor="#EF77C8", AccentDimColor="#A84FA6", AccentSubtleColor="#4B2A72",
+            BackgroundColor="#151024", SurfaceColor="#20183A", CardColor="#2A2050",
+            BorderColor="#45356B", TextPrimaryColor="#F8F1FF", TextSecondaryColor="#D0BDEB",
+            TextMutedColor="#9681BD", DangerColor="#FF645E",
+            FolderHoverColor="#1AEF77C8", FolderSelectedColor="#29EF77C8",
+            WindowHoverBorderColor="#66EF77C8", WindowHoverBackgroundColor="#0CEF77C8" } },
     };
 }

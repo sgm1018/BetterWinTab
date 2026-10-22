@@ -110,10 +110,6 @@ Filename: "reg.exe"; \
   Parameters: "delete ""HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""{#AppName}"" /f"; \
   Flags: runhidden; RunOnceId: "RemoveStartup"
 
-[UninstallDelete]
-; Remove all user settings and onboarding state so a fresh install starts from scratch
-Type: filesandordirs; Name: "{userappdata}\{#AppName}"
-
 [Code]
 // Returns True if WebView2 Runtime is NOT installed — used by the [Run] check above.
 // Checks the registry key that the WebView2 Runtime registers on install.

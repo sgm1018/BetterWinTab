@@ -2,6 +2,8 @@
 using System.Text;
 using BetterWinTab.Models;
 using BetterWinTab.Services;
+using BetterWinTab.Services.Calls;
+using BetterWinTab.Services.Calls.Ai;
 using Microsoft.UI.Dispatching;
 
 namespace BetterWinTab.ViewModels;
@@ -88,6 +90,8 @@ public partial class MainViewModel : BaseViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NotesFolderVisibility))]
     [NotifyPropertyChangedFor(nameof(NotesFolderIsSelected))]
+    [NotifyPropertyChangedFor(nameof(CallsFolderVisibility))]
+    [NotifyPropertyChangedFor(nameof(CallsFolderIsSelected))]
     private FolderItemViewModel? _notesFolderVM;
 
     /// <summary>True when the Notes folder tab is selected (for button highlight).</summary>
@@ -96,7 +100,17 @@ public partial class MainViewModel : BaseViewModel
     public Microsoft.UI.Xaml.Visibility NotesFolderVisibility =>
         NotesFolderVM != null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CallsFolderVisibility))]
+    [NotifyPropertyChangedFor(nameof(CallsFolderIsSelected))]
+    private FolderItemViewModel? _callsFolderVM;
+
+    public bool CallsFolderIsSelected => SelectedFolder == CallsFolderVM && CallsFolderVM != null;
+    public Microsoft.UI.Xaml.Visibility CallsFolderVisibility =>
+        CallsFolderVM != null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
     public NotesViewModel Notes { get; }
+    public CallsViewModel Calls { get; }
 
     [ObservableProperty]
     private WindowItemViewModel? _selectedWindow;
@@ -300,9 +314,11 @@ public partial class MainViewModel : BaseViewModel
     /// <summary>True when the Notes folder is selected (shows the notes editor instead of windows).</summary>
     public bool IsNotesFolderSelected => SelectedFolder?.Model?.Type == FolderType.Notes;
     public Visibility NotesPanelVisibility => IsNotesFolderSelected || _searchFilter == SearchFilter.Notes ? Visibility.Visible : Visibility.Collapsed;
+    public bool IsCallsFolderSelected => SelectedFolder?.Model?.Type == FolderType.Calls;
+    public Visibility CallsPanelVisibility => IsCallsFolderSelected || _searchFilter == SearchFilter.Calls ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility WindowGridVisibility =>
-        IsClipboardFolderSelected || IsNotesFolderSelected || _searchFilter is SearchFilter.Clipboard or SearchFilter.Notes
+        IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected || _searchFilter is SearchFilter.Clipboard or SearchFilter.Notes or SearchFilter.Calls
             ? Visibility.Collapsed
             : Visibility.Visible;
 
@@ -368,12 +384,14 @@ public partial class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(WindowGridVisibility));
         OnPropertyChanged(nameof(ClipboardPanelVisibility));
         OnPropertyChanged(nameof(NotesPanelVisibility));
+        OnPropertyChanged(nameof(CallsPanelVisibility));
 
         var targetFolder = filter switch
         {
             SearchFilter.Notes => NotesFolderVM,
+            SearchFilter.Calls => CallsFolderVM,
             SearchFilter.Clipboard => ClipboardFolderVM,
-            _ when IsClipboardFolderSelected || IsNotesFolderSelected => Folders.FirstOrDefault(),
+            _ when IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected => Folders.FirstOrDefault(),
             _ => null
         };
         if (targetFolder != null && !ReferenceEquals(SelectedFolder, targetFolder))
@@ -520,6 +538,13 @@ public partial class MainViewModel : BaseViewModel
         _launchService.SourcesChanged += OnLaunchSourcesChanged;
         Onboarding = new OnboardingViewModel(_settings, _settingsService);
         Notes = new NotesViewModel(ServiceContainer.Resolve<NotesService>());
+        Calls = new CallsViewModel(
+            ServiceContainer.Resolve<AudioCaptureService>(),
+            ServiceContainer.Resolve<AudioDeviceService>(),
+            ServiceContainer.Resolve<AudioRecordingStoreService>(),
+            ServiceContainer.Resolve<ReportGenerationService>(),
+            ServiceContainer.Resolve<GeneratedDocumentStore>(),
+              ServiceContainer.Resolve<CredentialStore>(), _settings, _settingsService);
         ClipboardHistory.CollectionChanged += (_, _) => RefreshFilteredClipboard();
         PinnedClipboardItems.CollectionChanged += (_, _) => RefreshFilteredClipboard();
 
@@ -556,6 +581,12 @@ public partial class MainViewModel : BaseViewModel
         if (!_folderService.Folders.Any(f => f.Type == FolderType.Notes))
         {
             _folderService.CreateNotesFolder();
+            SaveSettings();
+        }
+
+        if (!_folderService.Folders.Any(f => f.Type == FolderType.Calls))
+        {
+            _folderService.CreateCallsFolder();
             SaveSettings();
         }
 
@@ -610,15 +641,20 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedFolderChanged(FolderItemViewModel? value)
     {
-        if (!_changingSearchFilter && value?.Model?.Type is FolderType.Notes or FolderType.Clipboard)
+        if (!_changingSearchFilter && value?.Model?.Type is FolderType.Notes or FolderType.Clipboard or FolderType.Calls)
         {
-            _searchFilter = value.Model.Type == FolderType.Notes ? SearchFilter.Notes : SearchFilter.Clipboard;
+            _searchFilter = value.Model.Type switch
+            {
+                FolderType.Notes => SearchFilter.Notes,
+                FolderType.Calls => SearchFilter.Calls,
+                _ => SearchFilter.Clipboard
+            };
             OnPropertyChanged(nameof(IsAppSearchMode));
             OnPropertyChanged(nameof(SearchModeLabel));
         }
         else if (!_changingSearchFilter
-                 && _searchFilter is SearchFilter.Notes or SearchFilter.Clipboard
-                 && value?.Model?.Type is not (FolderType.Notes or FolderType.Clipboard))
+                 && _searchFilter is SearchFilter.Notes or SearchFilter.Clipboard or SearchFilter.Calls
+                 && value?.Model?.Type is not (FolderType.Notes or FolderType.Clipboard or FolderType.Calls))
         {
             _searchFilter = SearchFilter.All;
             OnPropertyChanged(nameof(IsAppSearchMode));
@@ -633,7 +669,8 @@ public partial class MainViewModel : BaseViewModel
             _syncingSelection = true;
             SelectedNonClipboardFolder = (value?.Model?.Type != FolderType.Clipboard &&
                                           value?.Model?.Type != FolderType.RecycleBin &&
-                                          value?.Model?.Type != FolderType.Notes) ? value : null;
+                                          value?.Model?.Type != FolderType.Notes &&
+                                          value?.Model?.Type != FolderType.Calls) ? value : null;
             _syncingSelection = false;
         }
 
@@ -658,6 +695,9 @@ public partial class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(RecycleBinFolderIsSelected));
         OnPropertyChanged(nameof(FolderSuggestionsVisibility));
         NotifyNotesSelectionChanged();
+        OnPropertyChanged(nameof(IsCallsFolderSelected));
+        OnPropertyChanged(nameof(CallsPanelVisibility));
+        OnPropertyChanged(nameof(CallsFolderIsSelected));
     }
 
     private void NotifyNotesSelectionChanged()
@@ -706,6 +746,7 @@ public partial class MainViewModel : BaseViewModel
         ClipboardFolderVM = null;
         RecycleBinFolderVM = null;
         NotesFolderVM = null;
+        CallsFolderVM = null;
 
         foreach (var folder in _folderService.Folders)
         {
@@ -717,6 +758,8 @@ public partial class MainViewModel : BaseViewModel
                 RecycleBinFolderVM = vm;
             else if (folder.Type == FolderType.Notes)
                 NotesFolderVM = vm;
+            else if (folder.Type == FolderType.Calls)
+                CallsFolderVM = vm;
             else
                 NonClipboardFolders.Add(vm);
         }
@@ -1500,6 +1543,13 @@ public partial class MainViewModel : BaseViewModel
     {
         if (NotesFolderVM != null)
             SelectedFolder = NotesFolderVM;
+    }
+
+    [RelayCommand]
+    public void SelectCallsFolder()
+    {
+        if (CallsFolderVM != null)
+            SelectedFolder = CallsFolderVM;
     }
 
     /// <summary>

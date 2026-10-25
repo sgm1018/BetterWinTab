@@ -7,5 +7,6 @@ public enum SearchFilter
     Tabs,
     Apps,
     Notes,
-    Clipboard
+    Clipboard,
+    Calls
 }

@@ -57,6 +57,8 @@
         <None Remove="BetterWinTab.slnx" />
         <Compile Remove="BrowserExtension\**\*.cs" />
         <Compile Remove="NotesPlugin\**\*.cs" />
+        <Compile Remove="AsrWorker\**\*.cs" />
+        <Compile Remove="Tests\**\*.cs" />
         <EmbeddedResource Remove="BrowserExtension\**\*" />
         <None Remove="BrowserExtension\**\*" />
     </ItemGroup>
@@ -70,6 +72,9 @@
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
         <PackageReference Include="System.Drawing.Common" Version="10.0.3" />
         <PackageReference Include="System.Text.Json" Version="9.*" />
+        <PackageReference Include="NAudio" Version="2.4.0" />
+
+        <ProjectReference Include="AsrWorker\AsrWorker.csproj" ReferenceOutputAssembly="false" />
 
         <Manifest Include="$(ApplicationManifest)" />
     </ItemGroup>
@@ -114,5 +119,16 @@
               DestinationFolder="$(PublishDir)"
               Condition="'$(PublishDir)' != ''"
               SkipUnchangedFiles="false" />
+    </Target>
+
+    <!-- Keep sherpa-onnx and its own onnxruntime.dll in a child process directory. -->
+    <Target Name="PublishAsrWorker" AfterTargets="Build;Publish" Condition="'$(Platform)' == 'x64'">
+        <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)\AsrWorker\AsrWorker.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=false -o &quot;$(OutDir)asr-worker&quot;" />
+        <ItemGroup Condition="'$(PublishDir)' != ''">
+            <_AsrWorkerFiles Include="$(OutDir)asr-worker\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_AsrWorkerFiles)"
+              DestinationFiles="@(_AsrWorkerFiles->'$(PublishDir)asr-worker\%(RecursiveDir)%(Filename)%(Extension)')"
+              Condition="'$(PublishDir)' != ''" SkipUnchangedFiles="true" />
     </Target>
 </Project>

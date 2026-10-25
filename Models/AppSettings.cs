@@ -78,6 +78,20 @@ public class AppSettings
     /// Browser tab discovery settings supplied by the Chromium extension bridge.
     /// </summary>
     public BrowserTabSettings BrowserTabs { get; set; } = new();
+
+    /// <summary>Non-secret preferences for the Calls workspace. API keys stay in Credential Locker.</summary>
+    public CallsSettings Calls { get; set; } = new();
+}
+
+public sealed class CallsSettings
+{
+    public string? MicrophoneDeviceId { get; set; }
+    public string? OutputDeviceId { get; set; }
+    public string AsrModelId { get; set; } = "moonshine-v2-base-es";
+    public bool ManualLanguage { get; set; }
+    public string Locale { get; set; } = "es-ES";
+    public string ProviderId { get; set; } = "openai";
+    public string ModelId { get; set; } = "gpt-4o-mini";
 }
 
 public class BrowserTabSettings

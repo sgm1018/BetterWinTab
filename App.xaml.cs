@@ -6,6 +6,8 @@ using WinRT.Interop;
 using BetterWinTab.Services;
 using BetterWinTab.Models;
 using BetterWinTab.Interop;
+using BetterWinTab.Services.Calls;
+using BetterWinTab.Services.Calls.Ai;
 
 namespace BetterWinTab
 {
@@ -108,6 +110,18 @@ namespace BetterWinTab
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
             ServiceContainer.RegisterSingleton(() => new ClipboardService());
             ServiceContainer.RegisterSingleton(() => new NotesService());
+            ServiceContainer.RegisterSingleton(() => new AudioCaptureService());
+            ServiceContainer.RegisterSingleton(() => new AudioDeviceService());
+            ServiceContainer.RegisterSingleton(() => new AudioRecordingStoreService());
+            ServiceContainer.RegisterSingleton(() => new CredentialStore());
+            ServiceContainer.RegisterSingleton<IApiKeyProvider>(() =>
+                new CredentialStoreKeyProvider(ServiceContainer.Resolve<CredentialStore>()));
+            ServiceContainer.RegisterSingleton(() => new ChatProviderFactory(
+                ServiceContainer.Resolve<IApiKeyProvider>()));
+            ServiceContainer.RegisterSingleton(() => new GeneratedDocumentStore());
+            ServiceContainer.RegisterSingleton(() => new ReportGenerationService(
+                ServiceContainer.Resolve<ChatProviderFactory>(),
+                ServiceContainer.Resolve<GeneratedDocumentStore>()));
             ServiceContainer.RegisterSingleton(() => new SemanticModelService());
             ServiceContainer.RegisterSingleton(() => new SemanticEmbeddingService(
                 ServiceContainer.Resolve<SemanticModelService>()));
@@ -185,6 +199,7 @@ namespace BetterWinTab
                 {
                     page.StopNotesBridge();
                     page.OnOverlayHidden();
+                    page.ViewModel.Calls.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 }
             }
             catch
@@ -214,6 +229,15 @@ namespace BetterWinTab
             try
             {
                 ServiceContainer.Resolve<NotesService>().Dispose();
+            }
+            catch
+            {
+                // Best-effort cleanup only.
+            }
+
+            try
+            {
+                ServiceContainer.Resolve<AudioCaptureService>().DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
             catch
             {

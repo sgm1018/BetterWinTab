@@ -42,6 +42,7 @@ public partial class FolderItemViewModel : BaseViewModel
             FolderType.SmartRules => model.GetFilterSummary(),
             FolderType.Clipboard => "Clipboard history",
             FolderType.Notes => "Your notes",
+            FolderType.Calls => "Call recordings",
             FolderType.Manual => "Custom folder",
             _ => ""
         };

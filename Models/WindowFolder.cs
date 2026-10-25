@@ -89,5 +89,7 @@ public enum FolderType
     /// <summary>Special recycle bin folder — opens the Windows Recycle Bin.</summary>
     RecycleBin,
     /// <summary>Special notes folder — shows the rich-text notes editor.</summary>
-    Notes
+    Notes,
+    /// <summary>Special Calls workspace — recordings and transcripts.</summary>
+    Calls
 }

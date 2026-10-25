@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Controls;
 using BetterWinTab.Interop;
 using BetterWinTab.Models;
 using BetterWinTab.Services;
@@ -830,8 +831,8 @@ public sealed partial class MainPage : Page
 
     private void KeyboardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        // Arrow keys belong to the notes editor while it has focus.
-        if (IsNotesEditorFocused()) return;
+        // Editable controls own their navigation keys; don't let global accelerators move selection.
+        if (IsNotesEditorFocused() || IsEditableInputFocused()) return;
 
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
         
@@ -979,6 +980,10 @@ public sealed partial class MainPage : Page
 
         // The notes editor (WebView2) owns its keys (Ctrl+B, Tab, Enter, typing...).
         if (IsNotesEditorFocused()) return;
+
+        // Text-entry controls own keystrokes while focused. In particular, printable keys
+        // must not be redirected to the global search box from Calls and Settings fields.
+        if (IsEditableInputFocused()) return;
 
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
 
@@ -1179,6 +1184,21 @@ public sealed partial class MainPage : Page
 
     private static bool IsTypableKey(Windows.System.VirtualKey key) => KeyboardHelper.IsTypableKey(key);
     private static char VirtualKeyToChar(Windows.System.VirtualKey key) => KeyboardHelper.VirtualKeyToChar(key);
+
+    private bool IsEditableInputFocused()
+    {
+        if (XamlRoot == null) return false;
+        var focused = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        if (ReferenceEquals(focused, SearchBox)) return false;
+
+        while (focused != null)
+        {
+            if (focused is TextBox or PasswordBox or RichEditBox or AutoSuggestBox)
+                return true;
+            focused = VisualTreeHelper.GetParent(focused);
+        }
+        return false;
+    }
 
     /// <summary>
     /// Click a window card to switch to it.
@@ -1477,6 +1497,17 @@ public sealed partial class MainPage : Page
     {
         if (SettingsNav.SelectedItem is ListViewItem item && item.Tag is string tag)
             ViewModel.Settings.ActiveSettingsTab = tag;
+    }
+
+    private void CallsApiKey_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox box)
+            ViewModel.Calls.ApiKey = box.Password;
+    }
+
+    private async void CallsTranscript_LostFocus(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.Calls.SaveTranscriptCommand.ExecuteAsync(null);
     }
 
     // ═══════════════════════════════════════════════════════════════

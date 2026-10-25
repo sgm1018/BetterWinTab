@@ -53,8 +53,8 @@ public class FolderService
 
         folder.Windows.Clear();
 
-        // Clipboard, RecycleBin and Notes folders don't contain windows
-        if (folder.Type is FolderType.Clipboard or FolderType.RecycleBin or FolderType.Notes)
+        // Special workspaces don't contain windows.
+        if (folder.Type is FolderType.Clipboard or FolderType.RecycleBin or FolderType.Notes or FolderType.Calls)
             return;
 
         var filtered = folder.Type switch
@@ -189,6 +189,21 @@ public class FolderService
         return folder;
     }
 
+    /// <summary>Creates the special Calls workspace.</summary>
+    public WindowFolder CreateCallsFolder()
+    {
+        var folder = new WindowFolder
+        {
+            Name = "Calls",
+            Icon = "\uE720",
+            BackgroundColor = "#2A2A2A",
+            Type = FolderType.Calls,
+            SortOrder = Folders.Count
+        };
+        Folders.Add(folder);
+        return folder;
+    }
+
     /// <summary>
     /// Removes a folder by its ID. Cannot remove built-in special folders.
     /// </summary>
@@ -197,7 +212,7 @@ public class FolderService
         var folder = Folders.FirstOrDefault(f => f.Id == folderId);
         if (folder == null || folder.Type == FolderType.All ||
             folder.Type == FolderType.Clipboard || folder.Type == FolderType.RecycleBin ||
-            folder.Type == FolderType.Notes)
+            folder.Type == FolderType.Notes || folder.Type == FolderType.Calls)
             return false;
 
         return Folders.Remove(folder);

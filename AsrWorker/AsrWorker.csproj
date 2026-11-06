@@ -9,6 +9,7 @@
     <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Models\Transcription\StreamingProtocol.cs" Link="StreamingProtocol.cs" />
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
     <PackageReference Include="NAudio" Version="2.4.0" />
   </ItemGroup>

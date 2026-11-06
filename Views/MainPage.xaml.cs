@@ -21,6 +21,11 @@ public sealed partial class MainPage : Page
     private int _thumbGeneration;   // incremented on every folder switch / refresh
     private int _draggedFolderOldIndex = -1;
     private ScrollViewer? _windowGridScrollViewer;
+    private bool _followingTranscript = true;
+    private bool _transcriptScrollQueued;
+    private double _lastTranscriptOffset;
+    private double _lastTranscriptExtent;
+    private string? _transcriptRecordingId;
 
     // ── Delta-based DWM thumbnail scroll tracking ──
     // DWM thumbnails are positioned at absolute screen pixels by the compositor.
@@ -42,6 +47,7 @@ public sealed partial class MainPage : Page
     private static readonly UIntPtr SUBCLASS_ID = (UIntPtr)1001;
 
     private bool IsAnyModalOpen =>
+        _isCallsOptionsOpen ||
         ViewModel.Onboarding.IsOnboardingVisible ||
         ViewModel.Settings.IsSettingsPanelVisible ||
         ViewModel.IsAddFolderPanelVisible ||
@@ -51,6 +57,29 @@ public sealed partial class MainPage : Page
     {
         ViewModel = new MainViewModel();
         this.InitializeComponent();
+        _transcriptRecordingId = ViewModel.Calls.SelectedRecording?.Id;
+        ViewModel.Calls.TranscriptPresentationChanged += Calls_TranscriptPresentationChanged;
+        ViewModel.Calls.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(CallsViewModel.SelectedRecording))
+            {
+                var recordingId = ViewModel.Calls.SelectedRecording?.Id;
+                if (_transcriptRecordingId != recordingId)
+                {
+                    _transcriptRecordingId = recordingId;
+                    _followingTranscript = true;
+                    QueueTranscriptScroll();
+                }
+            }
+            if (args.PropertyName == nameof(CallsViewModel.IsEditingTranscript))
+            {
+                if (ViewModel.Calls.IsEditingTranscript)
+                    DispatcherQueue.TryEnqueue(() => TranscriptEditor.Focus(FocusState.Programmatic));
+                else QueueTranscriptScroll();
+            }
+            if (args.PropertyName is nameof(CallsViewModel.IsRecording) or nameof(CallsViewModel.IsTranscribing))
+                UpdateReturnToLiveButton();
+        };
         this.Loaded += MainPage_Loaded;
         ViewModel.Windows.CollectionChanged += (_, _) =>
         {
@@ -832,7 +861,7 @@ public sealed partial class MainPage : Page
     private void KeyboardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         // Editable controls own their navigation keys; don't let global accelerators move selection.
-        if (IsNotesEditorFocused() || IsEditableInputFocused()) return;
+        if (IsAnyModalOpen || _isNotesFolderDialogOpen || IsCallsControlFocused() || IsNotesEditorFocused() || IsEditableInputFocused()) return;
 
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
         
@@ -922,7 +951,8 @@ public sealed partial class MainPage : Page
     /// </summary>
     private void HandleGlobalKey(KeyRoutedEventArgs e)
     {
-        if (_isNotesFolderDialogOpen) return;
+        if (_isNotesFolderDialogOpen || _isCallsOptionsOpen) return;
+        if (IsCallsControlFocused() && e.Key != Windows.System.VirtualKey.Escape) return;
 
         // Let the Add/Edit Folder dialog handle its own keys
         if (ViewModel.IsAddFolderPanelVisible)
@@ -1193,7 +1223,7 @@ public sealed partial class MainPage : Page
 
         while (focused != null)
         {
-            if (focused is TextBox or PasswordBox or RichEditBox or AutoSuggestBox)
+            if (focused is TextBox or PasswordBox or RichEditBox or AutoSuggestBox or WebView2)
                 return true;
             focused = VisualTreeHelper.GetParent(focused);
         }
@@ -1507,7 +1537,53 @@ public sealed partial class MainPage : Page
 
     private async void CallsTranscript_LostFocus(object sender, RoutedEventArgs e)
     {
-        await ViewModel.Calls.SaveTranscriptCommand.ExecuteAsync(null);
+        if (ViewModel.Calls.IsEditingTranscript && ViewModel.Calls.CanEditTranscript
+            && !ViewModel.Calls.SaveTranscriptCommand.IsRunning)
+            await ViewModel.Calls.SaveTranscriptCommand.ExecuteAsync(null);
+    }
+
+    private void Calls_TranscriptPresentationChanged(object? sender, EventArgs e) => QueueTranscriptScroll();
+
+    private void TranscriptContent_SizeChanged(object sender, SizeChangedEventArgs e) => QueueTranscriptScroll();
+
+    private void QueueTranscriptScroll()
+    {
+        UpdateReturnToLiveButton();
+        if (!_followingTranscript || _transcriptScrollQueued || ViewModel.Calls.IsEditingTranscript) return;
+        _transcriptScrollQueued = true;
+        if (!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _transcriptScrollQueued = false;
+            if (_followingTranscript && !ViewModel.Calls.IsEditingTranscript)
+                TranscriptScrollViewer.ChangeView(null, TranscriptScrollViewer.ScrollableHeight, null, true);
+        })) _transcriptScrollQueued = false;
+    }
+
+    private void TranscriptScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+    {
+        var offset = TranscriptScrollViewer.VerticalOffset;
+        var extent = TranscriptScrollViewer.ScrollableHeight;
+        var atBottom = extent - offset <= 24;
+        if (atBottom) _followingTranscript = true;
+        // Growing text changes the extent; only a scroll toward earlier text pauses following.
+        else if (offset < _lastTranscriptOffset - 0.5 && Math.Abs(extent - _lastTranscriptExtent) < 0.5)
+            _followingTranscript = false;
+        _lastTranscriptOffset = offset;
+        _lastTranscriptExtent = extent;
+        UpdateReturnToLiveButton();
+    }
+
+    private void UpdateReturnToLiveButton()
+    {
+        if (ReturnToLiveButton == null) return;
+        ReturnToLiveButton.Visibility = !_followingTranscript && (ViewModel.Calls.IsRecording || ViewModel.Calls.IsTranscribing)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ReturnToLive_Click(object sender, RoutedEventArgs e)
+    {
+        _followingTranscript = true;
+        QueueTranscriptScroll();
     }
 
     // ═══════════════════════════════════════════════════════════════

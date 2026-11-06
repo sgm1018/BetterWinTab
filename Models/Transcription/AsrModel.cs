@@ -23,10 +23,18 @@ public sealed record AsrModel(
 
 public sealed class AsrModelCatalog
 {
+    public const string StreamingModelId = "nemotron-3.5-asr-streaming-0.6b";
     // sherpa-onnx's documented Moonshine v2 Spanish bundle is Base (about 63 MB), offline only.
     // The model is governed by Moonshine Community License; sherpa-onnx itself is Apache-2.0.
     public static IReadOnlyList<AsrModel> Models { get; } = new[]
     {
+        new AsrModel(
+            StreamingModelId, "Nemotron 3.5 — live transcription", new[] { "es-ES", "es-US", "en-US" },
+            AsrExecutionMode.TrueStreaming, "NVIDIA Open Model License", "Apache-2.0",
+            "454 MB + speaker models", "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+            new[] { "encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt" },
+            "Local streaming recognition with provisional words and acoustic speaker diarization.", true,
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2"),
         new AsrModel(
             "moonshine-v2-base-es", "Moonshine v2 Base (Spanish)", new[] { "es" },
             AsrExecutionMode.Offline, "Moonshine Community License", "Apache-2.0",
@@ -34,11 +42,6 @@ public sealed class AsrModelCatalog
             new[] { "encoder_model.ort", "decoder_model_merged.ort", "tokens.txt", "LICENSE" },
             "Offline file decoding after recording. Model is Spanish only; language detection is not provided. No Tiny/Small Spanish sherpa bundle is documented.", true,
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-base-es-quantized-2026-02-27.tar.bz2"),
-        new AsrModel(
-            "nemotron-3.5-asr-streaming-0.6b", "Nemotron 3.5 ASR Streaming 0.6B", new[] { "es-ES", "es-US" },
-            AsrExecutionMode.TrueStreaming, "NVIDIA Open Model License", "Apache-2.0",
-            "model bundle size depends on exported quantization", null, Array.Empty<string>(),
-            "Sherpa-onnx documents streaming support; substantially larger (600M parameters) and CPU latency/memory must be measured on target hardware.", false)
     };
 }
 
@@ -57,5 +60,5 @@ public static class DiarizationModelCatalog
     };
 
     public const string CurrentTranscriptCapability =
-        "Current labels distinguish only microphone from call audio. Remote-speaker diarization would require the Pyannote segmentation and 3D-Speaker embedding models listed here, plus timestamp alignment; Moonshine Base returns no word timestamps, so speakers are not assigned to transcript text.";
+        "Voices in system audio are identified locally. Speaker labels may settle as more speech is heard; overlapping voices can remain uncertain.";
 }

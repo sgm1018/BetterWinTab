@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="BetterWinTab.Views.CallsOptionsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:BetterWinTab.Converters"
+    Title="Call options"
+    CloseButtonText="Done"
+    DefaultButton="Close"
+    RequestedTheme="Dark"
+    Background="{StaticResource DarkSurfaceBrush}"
+    Foreground="{StaticResource TextPrimaryBrush}"
+    MaxWidth="800"
+    MaxHeight="660">
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">800</x:Double>
+        <x:Double x:Key="ContentDialogMaxHeight">660</x:Double>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="OptionsDescription" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        </Style>
+    </ContentDialog.Resources>
+
+    <Grid x:Name="OptionsContent" Width="640" MaxHeight="480" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Pivot x:Name="Sections" HorizontalAlignment="Stretch">
+            <PivotItem Header="Audio" Margin="0,12,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ContentControl IsEnabled="{Binding CanConfigureAudio}" HorizontalContentAlignment="Stretch">
+                    <StackPanel Spacing="16" Padding="0,0,12,8">
+                        <TextBlock Text="Record system audio and optionally include your voice."
+                                   Style="{StaticResource OptionsDescription}" />
+                        <CheckBox Content="Include microphone (record my voice)"
+                                  IsChecked="{Binding IncludeMicrophone, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanIncludeMicrophone}" />
+                        <ComboBox Header="Microphone" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Microphones}" DisplayMemberPath="Name"
+                                  SelectedItem="{Binding SelectedMicrophone, Mode=TwoWay}"
+                                  IsEnabled="{Binding IncludeMicrophone}" />
+                        <ComboBox Header="System audio output" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Outputs}" DisplayMemberPath="Name"
+                                  SelectedItem="{Binding SelectedOutput, Mode=TwoWay}" />
+                        <TextBlock Text="Bluetooth hands-free microphones and outputs are excluded to preserve headphone playback quality. To include your voice, use a separate USB or built-in microphone."
+                                   Style="{StaticResource OptionsDescription}" />
+                        <Button Content="Refresh audio devices" Command="{Binding RefreshAudioDevicesCommand}" />
+                    </StackPanel>
+                    </ContentControl>
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem Header="Transcription" Margin="0,12,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16" Padding="0,0,12,8">
+                        <TextBlock Text="Words appear progressively as they are recognized. Speaker labels settle as more audio becomes available. Audio stays on this PC. Each recording is transcribed once; its saved transcript can then be edited."
+                                   Style="{StaticResource OptionsDescription}" />
+                        <ContentControl IsEnabled="{Binding CanConfigureAudio}" HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="12">
+                            <ComboBox Header="Speech model" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding AsrModels}" DisplayMemberPath="DisplayName"
+                                      SelectedItem="{Binding SelectedAsrModel, Mode=TwoWay}" />
+                            <Button Content="Download speech and speaker models"
+                                    Command="{Binding DownloadAsrModelCommand}" />
+                            <Button Content="Import model archive (.tar.bz2 / .zip)"
+                                    Command="{Binding ImportAsrModelCommand}" />
+                        </StackPanel>
+                        </ContentControl>
+                        <TextBlock Text="Speech and speaker models are ready."
+                                   Visibility="{Binding IsAsrModelInstalled, Converter={StaticResource BoolToVisibility}}"
+                                   Style="{StaticResource OptionsDescription}" />
+                        <StackPanel Orientation="Horizontal" Spacing="12"
+                                    Visibility="{Binding IsInstallingAsrModel, Converter={StaticResource BoolToVisibility}}">
+                            <ProgressRing Width="20" Height="20" IsActive="{Binding IsInstallingAsrModel}"
+                                          AutomationProperties.Name="Preparing speech and speaker models" />
+                            <TextBlock Text="Preparing speech and speaker models…" VerticalAlignment="Center"
+                                       Style="{StaticResource OptionsDescription}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding DiarizationStatus}" Style="{StaticResource OptionsDescription}" />
+                        <ContentControl IsEnabled="{Binding CanConfigureAudio}" HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="12">
+                            <CheckBox Content="Select transcription language manually"
+                                      IsChecked="{Binding IsManualLanguage, Mode=TwoWay}" />
+                            <StackPanel Spacing="12" Visibility="{Binding ManualLanguageVisibility}">
+                                <TextBox Header="Find language" PlaceholderText="Search languages…"
+                                         Text="{Binding LanguageSearch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <ComboBox Header="Language" HorizontalAlignment="Stretch"
+                                          ItemsSource="{Binding VisibleLanguages}"
+                                          SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem Header="AI" Margin="0,12,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ContentControl IsEnabled="{Binding CanConfigureAi}" HorizontalContentAlignment="Stretch">
+                    <StackPanel Spacing="16" Padding="0,0,12,8">
+                        <ComboBox Header="Provider" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Providers}" DisplayMemberPath="DisplayName"
+                                  SelectedValuePath="Id" SelectedValue="{Binding ProviderId, Mode=TwoWay}" />
+                        <ComboBox Header="Suggested model" HorizontalAlignment="Stretch"
+                                  Visibility="{Binding ProviderModelPickerVisibility}"
+                                  ItemsSource="{Binding ChatModels}" DisplayMemberPath="Name"
+                                  SelectedItem="{Binding SelectedChatModel, Mode=TwoWay}" />
+                        <TextBox Header="Model ID" PlaceholderText="Enter a model ID"
+                                 Text="{Binding ModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="OpenRouter accepts model IDs directly (provider/model)."
+                                   Visibility="{Binding OpenRouterModelHintVisibility}"
+                                   Style="{StaticResource OptionsDescription}" />
+                        <TextBlock Text="{Binding ModelCatalogStatus}" Style="{StaticResource OptionsDescription}" />
+                        <PasswordBox x:Name="ApiKeyBox" Header="API key"
+                                     PlaceholderText="Enter a new key to save or replace it"
+                                     PasswordRevealMode="Hidden" PasswordChanged="ApiKeyBox_PasswordChanged" />
+                        <TextBlock Text="Keys are saved in Windows Credential Locker. A saved key is never shown here; leave this field empty to keep using it."
+                                   Style="{StaticResource OptionsDescription}" />
+                        <Button Content="Save key" Command="{Binding SaveApiKeyCommand}" />
+                    </StackPanel>
+                    </ContentControl>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
+
+        <TextBlock Grid.Row="1" Text="{Binding Status}" Style="{StaticResource OptionsDescription}"
+                   AutomationProperties.Name="Call options status" AutomationProperties.LiveSetting="Polite" />
+    </Grid>
+</ContentDialog>

@@ -85,9 +85,10 @@ public class AppSettings
 
 public sealed class CallsSettings
 {
+    public bool IncludeMicrophone { get; set; }
     public string? MicrophoneDeviceId { get; set; }
     public string? OutputDeviceId { get; set; }
-    public string AsrModelId { get; set; } = "moonshine-v2-base-es";
+    public string AsrModelId { get; set; } = "nemotron-3.5-asr-streaming-0.6b";
     public bool ManualLanguage { get; set; }
     public string Locale { get; set; } = "es-ES";
     public string ProviderId { get; set; } = "openai";

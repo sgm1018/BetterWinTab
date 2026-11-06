@@ -9,23 +9,73 @@ namespace BetterWinTab.Services.Transcription;
 public sealed class AsrModelStore
 {
     private readonly string _rootDirectory;
+    private readonly string _diarizationDirectory;
 
     public AsrModelStore(string? rootDirectory = null)
     {
         _rootDirectory = rootDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BetterWinTab", "Models", "ASR");
+        _diarizationDirectory = rootDirectory == null
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BetterWinTab", "Models", "Diarization")
+            : Path.Combine(rootDirectory, "diarization");
     }
 
     public string GetModelPath(string modelId) => Path.Combine(_rootDirectory, modelId);
+    public string SegmentationModelPath => Path.Combine(_diarizationDirectory, "pyannote-segmentation-3.0", "model.onnx");
+    public string EmbeddingModelPath => Path.Combine(_diarizationDirectory, "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx");
+    public bool IsStreamingInstalled => IsInstalled(AsrModelCatalog.Models.Single(model => model.Id == AsrModelCatalog.StreamingModelId)) &&
+        File.Exists(SegmentationModelPath) && File.Exists(EmbeddingModelPath);
+
+    public async Task EnsureStreamingModelsAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    {
+        var model = AsrModelCatalog.Models.Single(item => item.Id == AsrModelCatalog.StreamingModelId);
+        if (!IsInstalled(model))
+        {
+            progress?.Report("Downloading live speech model (454 MB)…");
+            await DownloadAndInstallAsync(model, cancellationToken,
+                new Progress<double>(value => progress?.Report($"Downloading live speech model… {value:P0}"))).ConfigureAwait(false);
+        }
+        if (!File.Exists(SegmentationModelPath))
+        {
+            progress?.Report("Downloading speaker segmentation model…");
+            var segmentation = new AsrModel("pyannote-segmentation-3.0", "Speaker segmentation",
+                Array.Empty<string>(), AsrExecutionMode.Offline, "See model LICENSE", "Apache-2.0", "7 MB", null,
+                new[] { "model.onnx" }, "", true, DiarizationModelCatalog.RequiredAssets[0].ArchiveUri);
+            var store = new AsrModelStore(_diarizationDirectory);
+            await store.DownloadAndInstallAsync(segmentation, cancellationToken).ConfigureAwait(false);
+        }
+        if (!File.Exists(EmbeddingModelPath))
+        {
+            progress?.Report("Downloading speaker voice model (38 MB)…");
+            Directory.CreateDirectory(_diarizationDirectory);
+            var temporaryPath = EmbeddingModelPath + ".download";
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+                using var response = await client.GetAsync(DiarizationModelCatalog.RequiredAssets[1].ArchiveUri,
+                    HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                await using (var output = File.Create(temporaryPath))
+                    await input.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
+                if (new FileInfo(temporaryPath).Length < 1024) throw new InvalidDataException("The downloaded speaker model is incomplete.");
+                File.Move(temporaryPath, EmbeddingModelPath, overwrite: true);
+            }
+            finally { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
+        }
+        progress?.Report("Speech and speaker models are ready.");
+    }
 
     public bool IsInstalled(AsrModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
         var path = GetModelPath(model.Id);
-        return model.RequiredFiles.Count > 0 && model.RequiredFiles.All(file => File.Exists(Path.Combine(path, file)));
+        return model.RequiredFiles.Count > 0 && model.RequiredFiles.All(file =>
+            File.Exists(Path.Combine(path, file)) && new FileInfo(Path.Combine(path, file)).Length > 0);
     }
 
-    public async Task DownloadAndInstallAsync(AsrModel model, CancellationToken cancellationToken = default)
+    public async Task DownloadAndInstallAsync(AsrModel model, CancellationToken cancellationToken = default,
+        IProgress<double>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (!Uri.TryCreate(model.ArchiveUri, UriKind.Absolute, out var archiveUri) ||
@@ -42,7 +92,18 @@ public sealed class AsrModelStore
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
             await using (var destination = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                              bufferSize: 81920, useAsync: true))
-                await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+            {
+                var buffer = new byte[81920];
+                long received = 0;
+                int count;
+                while ((count = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+                {
+                    await destination.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+                    received += count;
+                    if (response.Content.Headers.ContentLength is > 0)
+                        progress?.Report(received / (double)response.Content.Headers.ContentLength.Value);
+                }
+            }
 
             await InstallArchiveAsync(model, archivePath, cancellationToken).ConfigureAwait(false);
         }

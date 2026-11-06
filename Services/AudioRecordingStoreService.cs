@@ -45,7 +45,7 @@ public sealed class AudioRecordingStoreService
 
     public async Task<AudioRecordingMetadata> CreateAsync(string? microphoneDeviceId, string? loopbackDeviceId,
         string? audioFilePath = null, CancellationToken cancellationToken = default,
-        string? microphoneAudioFilePath = null, string? loopbackAudioFilePath = null)
+        string? microphoneAudioFilePath = null, string? loopbackAudioFilePath = null, bool transcriptionStarted = false)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -56,11 +56,27 @@ public sealed class AudioRecordingStoreService
                 LoopbackDeviceId = loopbackDeviceId,
                 AudioFilePath = audioFilePath,
                 MicrophoneAudioFilePath = microphoneAudioFilePath,
-                LoopbackAudioFilePath = loopbackAudioFilePath
+                LoopbackAudioFilePath = loopbackAudioFilePath,
+                TranscriptionStarted = transcriptionStarted
             };
             _recordings.Add(item);
             await SaveIndexAsync(cancellationToken).ConfigureAwait(false);
             return Clone(item);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<bool> TryBeginTranscriptionAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var item = _recordings.FirstOrDefault(recording => recording.Id == id);
+            if (item == null || item.TranscriptionStarted || item.Transcript.Count > 0) return false;
+            item.TranscriptionStarted = true;
+            try { await SaveIndexAsync(cancellationToken).ConfigureAwait(false); }
+            catch { item.TranscriptionStarted = false; throw; }
+            return true;
         }
         finally { _gate.Release(); }
     }
@@ -94,6 +110,7 @@ public sealed class AudioRecordingStoreService
             var item = _recordings.FirstOrDefault(recording => recording.Id == id);
             if (item == null) return false;
             item.Transcript = replacement;
+            if (replacement.Count > 0) item.TranscriptionStarted = true;
             await SaveIndexAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
@@ -146,11 +163,17 @@ public sealed class AudioRecordingStoreService
         AudioFilePath = item.AudioFilePath,
         MicrophoneAudioFilePath = item.MicrophoneAudioFilePath,
         LoopbackAudioFilePath = item.LoopbackAudioFilePath,
+        TranscriptionStarted = item.TranscriptionStarted,
         Transcript = item.Transcript.Select(Clone).ToList()
     };
 
     private static AudioTranscriptSegment Clone(AudioTranscriptSegment item) => new()
     {
+        Id = item.Id,
+        Source = item.Source,
+        SpeakerId = item.SpeakerId,
+        IsIncomplete = item.IsIncomplete,
+        IsSpeakerUncertain = item.IsSpeakerUncertain,
         StartSeconds = item.StartSeconds,
         DurationSeconds = item.DurationSeconds,
         Text = item.Text,

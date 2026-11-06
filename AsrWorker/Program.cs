@@ -1,6 +1,11 @@
 using System.Text.Json;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using SherpaOnnx;
+using BetterWinTab.AsrWorker;
+
+if (args.Length > 0 && args[0] == "--stream")
+    return StreamingWorker.Run(args);
 
 if (args.Length != 2)
 {
@@ -16,18 +21,24 @@ try
     config.ModelConfig.Moonshine.Encoder = Path.Combine(modelDirectory, "encoder_model.ort");
     config.ModelConfig.Moonshine.MergedDecoder = Path.Combine(modelDirectory, "decoder_model_merged.ort");
     config.ModelConfig.Tokens = Path.Combine(modelDirectory, "tokens.txt");
-    config.ModelConfig.NumThreads = Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
+    config.ModelConfig.NumThreads = Math.Clamp(Environment.ProcessorCount / 2, 1, 2);
     config.ModelConfig.Debug = 0;
 
     using var recognizer = new OfflineRecognizer(config);
     using var wave = new AudioFileReader(wavePath);
-    using var stream = recognizer.CreateStream();
+    // Resample continuously: sherpa creates a fresh resampler on each AcceptWaveform
+    // call at a different rate, losing filter state at every input buffer boundary.
+    const int sampleRate = 16000;
+    ISampleProvider samples = wave.WaveFormat.SampleRate == sampleRate
+        ? wave : new WdlResamplingSampleProvider(wave, sampleRate);
     var channelCount = wave.WaveFormat.Channels;
     var input = new float[8192 * channelCount];
-    var mono = new float[8192];
+    var mono = new float[sampleRate * 8];
+    var monoCount = 0;
+    var segments = new List<WorkerSegment>();
     long samplesRead = 0;
     int count;
-    while ((count = wave.Read(input, 0, input.Length)) > 0)
+    while ((count = samples.Read(input, 0, input.Length)) > 0)
     {
         var frames = count / channelCount;
         for (var frame = 0; frame < frames; frame++)
@@ -35,16 +46,32 @@ try
             var sum = 0f;
             for (var channel = 0; channel < channelCount; channel++)
                 sum += input[frame * channelCount + channel];
-            mono[frame] = sum / channelCount;
+            mono[monoCount++] = sum / channelCount;
+            samplesRead++;
+            if (monoCount == mono.Length)
+            {
+                DecodeChunk(monoCount);
+                monoCount = 0;
+            }
         }
-        stream.AcceptWaveform(wave.WaveFormat.SampleRate, mono.AsSpan(0, frames).ToArray());
-        samplesRead += frames;
     }
-    recognizer.Decode(stream);
+    if (monoCount > 0) DecodeChunk(monoCount);
 
-    var response = new WorkerResponse(stream.Result.Text, samplesRead / (double)wave.WaveFormat.SampleRate);
+    var response = new WorkerResponse(string.Join(" ", segments.Select(segment => segment.Text)),
+        samplesRead / (double)sampleRate, segments);
     Console.Out.WriteLine("BWTA_RESULT:" + JsonSerializer.Serialize(response));
     return 0;
+
+    void DecodeChunk(int length)
+    {
+        using var stream = recognizer.CreateStream();
+        stream.AcceptWaveform(sampleRate, mono.AsSpan(0, length).ToArray());
+        recognizer.Decode(stream);
+        var text = stream.Result.Text.Trim();
+        if (text.Length > 0)
+            segments.Add(new WorkerSegment(text, (samplesRead - length) / (double)sampleRate,
+                length / (double)sampleRate));
+    }
 }
 catch (Exception exception)
 {
@@ -52,4 +79,5 @@ catch (Exception exception)
     return 1;
 }
 
-internal sealed record WorkerResponse(string Text, double DurationSeconds);
+internal sealed record WorkerResponse(string Text, double DurationSeconds, IReadOnlyList<WorkerSegment> Segments);
+internal sealed record WorkerSegment(string Text, double StartSeconds, double DurationSeconds);

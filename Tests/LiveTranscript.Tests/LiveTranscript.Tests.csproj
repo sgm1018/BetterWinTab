@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="2.4.0" />
+    <Compile Include="../../Services/Transcription/StreamingPcmConverter.cs" Link="StreamingPcmConverter.cs" />
+    <Compile Include="../../Models/Transcription/StreamingProtocol.cs" Link="StreamingProtocol.cs" />
+    <Compile Include="../../Models/AudioCaptureModels.cs" Link="AudioCaptureModels.cs" />
+    <Compile Include="../../Services/Transcription/TranscriptAccumulator.cs" Link="TranscriptAccumulator.cs" />
+    <Compile Include="../../Services/AudioRecordingStoreService.cs" Link="AudioRecordingStoreService.cs" />
+    <Compile Include="../../Services/Transcription/SherpaStreamingSession.cs" Link="SherpaStreamingSession.cs" />
+    <Compile Include="../../Services/Transcription/AsrModelStore.cs" Link="AsrModelStore.cs" />
+    <Compile Include="../../Models/Transcription/AsrModel.cs" Link="AsrModel.cs" />
+    <Compile Include="../../Services/Transcription/TranscriptTextEditor.cs" Link="TranscriptTextEditor.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
+    <Compile Include="../../ViewModels/TranscriptMessageViewModel.cs" Link="TranscriptMessageViewModel.cs" />
+    <Compile Include="../../ViewModels/CallsViewModel.Transcript.cs" Link="CallsViewModel.Transcript.cs" />
+    <Compile Include="../../Models/Transcription/StreamingProtocol.cs" Link="StreamingProtocol.cs" />
+    <Compile Include="../../Models/AudioCaptureModels.cs" Link="AudioCaptureModels.cs" />
+  </ItemGroup>
+</Project>

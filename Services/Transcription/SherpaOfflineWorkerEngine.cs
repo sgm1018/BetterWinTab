@@ -47,6 +47,8 @@ public sealed class SherpaOfflineWorkerEngine : ITranscriptionEngine
         start.ArgumentList.Add(_modelStore.GetModelPath(ModelId));
         start.ArgumentList.Add(Path.GetFullPath(wavePath));
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the isolated sherpa worker.");
+        try { process.PriorityClass = ProcessPriorityClass.BelowNormal; }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         using var cancellation = cancellationToken.Register(() =>
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
@@ -58,7 +60,7 @@ public sealed class SherpaOfflineWorkerEngine : ITranscriptionEngine
         var error = await errorTask.ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"The offline ASR worker failed: {error.Trim()}");
+            throw new InvalidOperationException($"The offline ASR worker failed (exit {process.ExitCode}): {error.Trim()}");
 
         var resultLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
@@ -67,12 +69,16 @@ public sealed class SherpaOfflineWorkerEngine : ITranscriptionEngine
             throw new InvalidDataException($"The ASR worker returned no result: {output.Trim()}");
         var response = JsonSerializer.Deserialize<WorkerResponse>(resultLine["BWTA_RESULT:".Length..])
             ?? throw new InvalidDataException("The ASR worker returned an empty response.");
-        var segment = string.IsNullOrWhiteSpace(response.Text)
+        var segments = response.Segments?.Select(segment => new TranscriptSegment(
+            TimeSpan.FromSeconds(segment.StartSeconds),
+            TimeSpan.FromSeconds(segment.StartSeconds + segment.DurationSeconds), segment.Text)).ToArray();
+        segments ??= string.IsNullOrWhiteSpace(response.Text)
             ? Array.Empty<TranscriptSegment>()
             : new[] { new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(response.DurationSeconds), response.Text.Trim()) };
-        return new TranscriptDocument(segment, Array.Empty<TranscriptParticipant>(), null, ModelId,
+        return new TranscriptDocument(segments, Array.Empty<TranscriptParticipant>(), null, ModelId,
             TranscriptMode.Offline, DateTimeOffset.UtcNow);
     }
 
-    private sealed record WorkerResponse(string Text, double DurationSeconds);
+    private sealed record WorkerResponse(string Text, double DurationSeconds, WorkerSegment[]? Segments = null);
+    private sealed record WorkerSegment(string Text, double StartSeconds, double DurationSeconds);
 }

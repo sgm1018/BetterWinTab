@@ -8,6 +8,7 @@
     xmlns:vm="using:BetterWinTab.ViewModels"
     xmlns:conv="using:BetterWinTab.Converters"
     xmlns:models="using:BetterWinTab.Models"
+    xmlns:controls="using:BetterWinTab.Controls"
     mc:Ignorable="d"
     RequestedTheme="Dark"
     IsTabStop="True"
@@ -1385,79 +1386,149 @@
                 </Grid>
             </Grid>
 
-            <!-- CALLS: recordings library, transcript and AI reports -->
+            <!-- Calls workspace: library, two reading panes and one composer. -->
             <Grid x:Name="CallsPanel" Grid.Row="0" Grid.RowSpan="2"
                   Visibility="{x:Bind ViewModel.CallsPanelVisibility, Mode=OneWay}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="380" />
                 </Grid.ColumnDefinitions>
-
-                <Grid Grid.Column="0" Background="{StaticResource DarkSurfaceBrush}"
-                      BorderBrush="{StaticResource NeonGreenSubtleBrush}" BorderThickness="0,0,1,0">
+                <Grid Background="{StaticResource DarkSurfaceBrush}" BorderBrush="#FF30343B" BorderThickness="0,0,1,0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Padding="16,16,16,10" Spacing="8">
-                        <TextBlock Text="Calls" FontSize="{StaticResource FontSizeLarge}" FontWeight="Bold"
-                                   Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Recordings" Foreground="{StaticResource TextMutedBrush}"
-                                   FontSize="{StaticResource FontSizeSmall}" />
+                    <StackPanel Padding="20,24,16,16" Spacing="6">
+                        <TextBlock Text="Calls" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock Text="Recordings" FontSize="14" Foreground="{StaticResource TextMutedBrush}" />
                     </StackPanel>
-                    <Button Grid.Row="1" Margin="12,4" Content="＋ New recording"
-                            Command="{x:Bind ViewModel.Calls.CreateRecordingCommand}"
-                            Style="{StaticResource NeonButtonStyle}" />
-                    <ListView Grid.Row="2" Margin="8,4" ItemsSource="{x:Bind ViewModel.Calls.Recordings}"
+                    <ListView Grid.Row="1" Margin="8,0" ItemsSource="{x:Bind ViewModel.Calls.Recordings}"
                               SelectedItem="{x:Bind ViewModel.Calls.SelectedRecording, Mode=TwoWay}"
-                              SelectionMode="Single" Background="Transparent">
+                              SelectionMode="Single" Background="Transparent" AutomationProperties.Name="Recordings">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Padding="8,10" Spacing="4">
-                                    <TextBlock Text="{Binding StartedAtUtc}"
-                                               Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Transcript.Count, Mode=OneWay, FallbackValue=Audio saved}"
-                                               Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeSmall}" />
+                                <StackPanel Padding="8,12" Spacing="6">
+                                    <TextBlock Text="{Binding StartedAtUtc}" TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="{Binding Transcript.Count, Mode=OneWay}" Foreground="{StaticResource TextMutedBrush}" FontSize="12" />
+                                        <TextBlock Text="speaker turns" Foreground="{StaticResource TextMutedBrush}" FontSize="12" />
+                                    </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                    <StackPanel Grid.Row="3" Padding="12" Spacing="8">
-                        <TextBlock Text="{x:Bind ViewModel.Calls.Status, Mode=OneWay}" TextWrapping="Wrap"
-                                   Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeSmall}" />
-                        <Button Content="■ Stop recording" Command="{x:Bind ViewModel.Calls.StopRecordingCommand}"
-                                Visibility="{x:Bind ViewModel.Calls.StopRecordingVisibility, Mode=OneWay}"
-                                Style="{StaticResource DangerButtonStyle}" />
-                    </StackPanel>
+                    <TextBlock Grid.Row="2" Margin="20,16" Text="Saved on this PC" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
                 </Grid>
-
-                <Grid Grid.Column="1" Background="{StaticResource PureBlackBrush}" Padding="20">
+                <Grid Grid.Column="1" Background="{StaticResource PureBlackBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="24,16" BorderBrush="#FF30343B" BorderThickness="0,0,0,1" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{x:Bind ViewModel.Calls.WorkspaceTitle, Mode=OneWay}" FontSize="18" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="Conversation &amp; notes" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Click="CallsOptions_Click" VerticalAlignment="Center" AutomationProperties.Name="Call options">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE713;" FontSize="16" /><TextBlock Text="Options" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" Background="{StaticResource PureBlackBrush}" Padding="24,20,24,12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
-                        <TextBlock Text="Transcript" FontSize="{StaticResource FontSizeLarge}" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                        <TextBlock Text="● RECORDING" Foreground="{StaticResource NeonGreenBrush}"
-                                   Visibility="{x:Bind ViewModel.Calls.StopRecordingVisibility, Mode=OneWay}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <StackPanel Spacing="12">
-                            <TextBox Text="{x:Bind ViewModel.Calls.TranscriptText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     TextWrapping="Wrap" AcceptsReturn="True" MinHeight="300"
-                                     PlaceholderText="Speech appears here as the recording is transcribed. You can also edit or paste text."
-                                     LostFocus="CallsTranscript_LostFocus"
-                                     Foreground="{StaticResource TextPrimaryBrush}" />
-                            <TextBlock Text="Start a recording to save separate microphone and system-audio tracks."
-                                       Visibility="{x:Bind ViewModel.Calls.TranscriptEmptyVisibility, Mode=OneWay}"
-                                       TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" />
+                    <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="Transcript" FontSize="{StaticResource FontSizeLarge}" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="● Recording" Foreground="{StaticResource NeonGreenBrush}"
+                                       Visibility="{x:Bind ViewModel.Calls.StopRecordingVisibility, Mode=OneWay}"
+                                       VerticalAlignment="Center" />
                         </StackPanel>
-                    </ScrollViewer>
+
+                    </StackPanel>
+                    <Grid Grid.Row="1" Visibility="{x:Bind ViewModel.Calls.ConversationVisibility, Mode=OneWay}">
+                        <ScrollViewer x:Name="TranscriptScrollViewer" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      ViewChanged="TranscriptScrollViewer_ViewChanged"
+                                      SizeChanged="TranscriptContent_SizeChanged"
+                                      Padding="0,0,8,48">
+                            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Calls.TranscriptMessages}"
+                                           MaxWidth="720" HorizontalAlignment="Stretch"
+                                           SizeChanged="TranscriptContent_SizeChanged">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="22" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TranscriptMessageViewModel">
+                                        <Grid ColumnSpacing="12" Padding="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="32" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="32" Height="32" CornerRadius="16"
+                                                    Background="{StaticResource DarkSurfaceBrush}"
+                                                    VerticalAlignment="Top" BorderThickness="1"
+                                                    BorderBrush="{x:Bind SpeakerBrush, Mode=OneWay}">
+                                                <TextBlock Text="{x:Bind Avatar, Mode=OneWay}" FontSize="13"
+                                                           Foreground="{x:Bind SpeakerBrush, Mode=OneWay}"
+                                                           VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="6">
+                                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                                    <TextBlock Text="{x:Bind Speaker, Mode=OneWay}" FontSize="14" FontWeight="SemiBold"
+                                                               Foreground="{x:Bind SpeakerBrush, Mode=OneWay}" />
+                                                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay}" FontSize="12"
+                                                               VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" FontSize="16"
+                                                           LineHeight="25" IsTextSelectionEnabled="True"
+                                                           Opacity="{x:Bind TextOpacity, Mode=OneWay}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                                                <TextBlock Text="{x:Bind Status, Mode=OneWay}" FontSize="12"
+                                                           Visibility="{x:Bind StatusVisibility, Mode=OneWay}"
+                                                           Foreground="{StaticResource TextMutedBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </ScrollViewer>
+                        <StackPanel MaxWidth="460" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                    Visibility="{x:Bind ViewModel.Calls.ConversationEmptyVisibility, Mode=OneWay}">
+                            <TextBlock Text="Your conversation appears here" FontSize="18" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="Start a recording below. Words appear live, with a separate label for each detected speaker."
+                                       TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" FontSize="14" />
+                        </StackPanel>
+                        <Button x:Name="ReturnToLiveButton" Content="↓ Return to live" Visibility="Collapsed"
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8"
+                                Click="ReturnToLive_Click" Style="{StaticResource NeonButtonStyle}" />
+                    </Grid>
+                    <TextBox Grid.Row="1" x:Name="TranscriptEditor"
+                             Visibility="{x:Bind ViewModel.Calls.TranscriptEditorVisibility, Mode=OneWay}"
+                             Text="{x:Bind ViewModel.Calls.TranscriptText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TextWrapping="Wrap" AcceptsReturn="True" FontSize="16"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             IsEnabled="{x:Bind ViewModel.Calls.CanEditTranscript, Mode=OneWay}"
+                             PlaceholderText="Edit or paste transcript text."
+                             AutomationProperties.Name="Transcript editor"
+                             LostFocus="CallsTranscript_LostFocus"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
                     <Border Grid.RowSpan="2" Background="#E6000000"
                             Visibility="{x:Bind ViewModel.Calls.CountdownVisibility, Mode=OneWay}">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
@@ -1472,117 +1543,93 @@
                     </Border>
                 </Grid>
 
-                <Grid Grid.Column="2" Background="{StaticResource DarkSurfaceBrush}"
-                      BorderBrush="{StaticResource NeonGreenSubtleBrush}" BorderThickness="1,0,0,0" Padding="16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="AI reports" FontSize="{StaticResource FontSizeLarge}" FontWeight="Bold"
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12" />
-                    <ComboBox Grid.Row="1" Header="Provider" ItemsSource="{x:Bind ViewModel.Calls.Providers}"
-                              DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                              SelectedValue="{x:Bind ViewModel.Calls.ProviderId, Mode=TwoWay}" Margin="0,0,0,8" />
-                    <StackPanel Grid.Row="2" Spacing="4" Margin="0,0,0,8"
-                                Visibility="{x:Bind ViewModel.Calls.ProviderModelPickerVisibility, Mode=OneWay}">
-                        <ComboBox Header="Available models" ItemsSource="{x:Bind ViewModel.Calls.ChatModels}"
-                                  DisplayMemberPath="Name"
-                                  SelectedItem="{x:Bind ViewModel.Calls.SelectedChatModel, Mode=TwoWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.Calls.ModelCatalogStatus, Mode=OneWay}"
-                                   TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
-                                   FontSize="{StaticResource FontSizeSmall}" />
-                    </StackPanel>
-                    <TextBox Grid.Row="3" Header="Model ID (editable; enter a custom ID if needed)"
-                             Text="{x:Bind ViewModel.Calls.ModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="OpenRouter: provider/model" Margin="0,0,0,8" />
-                    <PasswordBox Grid.Row="4" Header="API key (stored in Windows Credential Locker)"
-                                 PasswordChanged="CallsApiKey_PasswordChanged" Margin="0,0,0,8" />
-                    <Button Grid.Row="5" Content="Save key" Command="{x:Bind ViewModel.Calls.SaveApiKeyCommand}"
-                            HorizontalAlignment="Right" Margin="0,0,0,8"
-                            Style="{StaticResource NeonButtonStyle}" />
-                    <TextBlock Grid.Row="2" Text="OpenRouter accepts model IDs directly (provider/model)."
-                               Visibility="{x:Bind ViewModel.Calls.OpenRouterModelHintVisibility, Mode=OneWay}"
-                               TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="{StaticResource FontSizeSmall}" Margin="0,8,0,0" />
-                    <ScrollViewer Grid.Row="6" VerticalScrollBarVisibility="Auto">
-                        <StackPanel Spacing="10">
-                            <ListView ItemsSource="{x:Bind ViewModel.Calls.Reports}"
+                        <Border Grid.Column="1" Background="#FF30343B" />
+                        <Grid Grid.Column="2" Padding="24,20,24,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Margin="0,0,0,16" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="AI notes" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" />
+                                <Button Grid.Column="1" Content="Copy" Click="CopyCallNotes_Click" IsEnabled="{x:Bind ViewModel.Calls.CanCopyNotes, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Copy notes as Markdown" AutomationProperties.Name="Copy notes as Markdown" />
+                            </Grid>
+                            <ComboBox Grid.Row="1" Margin="0,0,0,12" HorizontalAlignment="Stretch" PlaceholderText="Saved notes"
+                                      ItemsSource="{x:Bind ViewModel.Calls.CurrentReports, Mode=OneWay}"
                                       SelectedItem="{x:Bind ViewModel.Calls.SelectedReport, Mode=TwoWay}"
-                                      MaxHeight="140" SelectionMode="Single" Background="Transparent">
-                                <ListView.ItemTemplate>
+                                      IsEnabled="{x:Bind ViewModel.Calls.CanConfigureAi, Mode=OneWay}"
+                                      AutomationProperties.Name="Saved notes for this recording">
+                                <ComboBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <TextBlock Text="{Binding TemplateName}" />
+                                            <TextBlock Text="{Binding CreatedAtUtc}" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
                                     </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                            <ComboBox Header="Report type" ItemsSource="{x:Bind ViewModel.Calls.Templates}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Id"
-                                      SelectedValue="{x:Bind ViewModel.Calls.SelectedTemplateId, Mode=TwoWay}" />
-                            <TextBox Header="Custom instruction" Text="{x:Bind ViewModel.Calls.CustomPrompt, Mode=TwoWay}"
-                                     PlaceholderText="Ask the AI for a different report…" AcceptsReturn="True"
-                                     TextWrapping="Wrap" MinHeight="84" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Generate report" Command="{x:Bind ViewModel.Calls.GenerateReportCommand}"
-                                        Style="{StaticResource NeonButtonStyle}" />
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <controls:MarkdownPreview Grid.Row="2" Markdown="{x:Bind ViewModel.Calls.ReportText, Mode=OneWay}"
+                                                      Visibility="{x:Bind ViewModel.Calls.ReportContentVisibility, Mode=OneWay}" />
+                            <StackPanel Grid.Row="2" MaxWidth="380" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                        Visibility="{x:Bind ViewModel.Calls.ReportEmptyVisibility, Mode=OneWay}">
+                                <TextBlock Text="Turn the conversation into something useful" FontSize="18" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Text="Choose meeting notes, actions or decisions below. Add an instruction to shape the result, then generate your notes."
+                                           FontSize="14" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" />
                             </StackPanel>
-                            <TextBlock Text="{x:Bind ViewModel.Calls.ReportText, Mode=OneWay}"
-                                       TextWrapping="Wrap" IsTextSelectionEnabled="True"
-                                       Foreground="{StaticResource TextPrimaryBrush}" />
-                            <TextBlock Text="Reports will appear here once a transcript is available."
-                                       Visibility="{x:Bind ViewModel.Calls.ReportEmptyVisibility, Mode=OneWay}"
-                                       TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" />
-                            <TextBlock Text="Audio-to-text model" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,10,0,0" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.Calls.AsrModels}" DisplayMemberPath="DisplayName"
-                                      SelectedItem="{x:Bind ViewModel.Calls.SelectedAsrModel, Mode=TwoWay}" />
-                            <Button Content="Import model archive (.tar.bz2 / .zip)"
-                                    Command="{x:Bind ViewModel.Calls.ImportAsrModelCommand}"
-                                    Style="{StaticResource NeonButtonStyle}" />
-                            <Button Content="Download and install Moonshine (63 MB)"
-                                    Command="{x:Bind ViewModel.Calls.DownloadAsrModelCommand}"
-                                    Style="{StaticResource NeonButtonStyle}" />
-                            <TextBlock Text="Moonshine Spanish Base transcribes offline in 8-second audio chunks while recording. It supports Spanish only; download or import the model to enable transcription."
-                                       TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
-                                       FontSize="{StaticResource FontSizeSmall}" />
-                            <TextBlock Text="Moonshine model installed"
-                                       Visibility="{x:Bind ViewModel.Calls.IsAsrModelInstalled, Mode=OneWay}"
-                                       Foreground="{StaticResource NeonGreenBrush}" />
-                            <TextBlock Text="Listening and transcribing audio…"
-                                       Visibility="{x:Bind ViewModel.Calls.IsTranscribing, Mode=OneWay}"
-                                       Foreground="{StaticResource NeonGreenBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.Calls.DiarizationStatus}"
-                                       TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
-                                       FontSize="{StaticResource FontSizeSmall}" />
-                            <CheckBox Content="Select transcription language manually"
-                                      IsChecked="{x:Bind ViewModel.Calls.IsManualLanguage, Mode=TwoWay}"
-                                      Foreground="{StaticResource TextPrimaryBrush}" />
-                            <TextBox Header="Find language" Text="{x:Bind ViewModel.Calls.LanguageSearch, Mode=TwoWay}"
-                                     PlaceholderText="Search languages…"
-                                     Visibility="{x:Bind ViewModel.Calls.ManualLanguageVisibility, Mode=OneWay}" />
-                            <ComboBox Header="Language" ItemsSource="{x:Bind ViewModel.Calls.VisibleLanguages}"
-                                      SelectedItem="{x:Bind ViewModel.Calls.SelectedLanguage, Mode=TwoWay}"
-                                      Visibility="{x:Bind ViewModel.Calls.ManualLanguageVisibility, Mode=OneWay}" />
-                            <ComboBox Header="Microphone" ItemsSource="{x:Bind ViewModel.Calls.Microphones}"
-                                      DisplayMemberPath="Name" SelectedItem="{x:Bind ViewModel.Calls.SelectedMicrophone, Mode=TwoWay}" />
-                            <ComboBox Header="System audio output" ItemsSource="{x:Bind ViewModel.Calls.Outputs}"
-                                      DisplayMemberPath="Name" SelectedItem="{x:Bind ViewModel.Calls.SelectedOutput, Mode=TwoWay}" />
-                        </StackPanel>
-                    </ScrollViewer>
+                        </Grid>
+                    </Grid>
+                    <Grid Grid.Row="2" Padding="24,16,24,12" RowSpacing="12" BorderBrush="#FF30343B" BorderThickness="0,1,0,0"
+                          Background="{StaticResource DarkSurfaceBrush}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBox Header="Instructions for your notes" PlaceholderText="What should these notes focus on?"
+                                 Text="{x:Bind ViewModel.Calls.CustomPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="68" MaxHeight="120"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="CallsComposer_KeyDown"
+                                 IsEnabled="{x:Bind ViewModel.Calls.CanConfigureAi, Mode=OneWay}"
+                                 AutomationProperties.Name="Instructions for AI notes" />
+                        <Grid Grid.Row="1" ColumnSpacing="12" RowSpacing="12" SizeChanged="CallsComposer_SizeChanged">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox Width="210" ItemsSource="{x:Bind ViewModel.Calls.Templates}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                                          SelectedValue="{x:Bind ViewModel.Calls.SelectedTemplateId, Mode=TwoWay}"
+                                          IsEnabled="{x:Bind ViewModel.Calls.CanConfigureAi, Mode=OneWay}" AutomationProperties.Name="Notes format" />
+                                <DropDownButton Content="Transcription">
+                                    <DropDownButton.Flyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Transcribe saved audio once" Command="{x:Bind ViewModel.Calls.TranscribeSelectedRecordingCommand}"
+                                                            IsEnabled="{x:Bind ViewModel.Calls.CanTranscribeRecording, Mode=OneWay}" />
+                                            <MenuFlyoutItem Text="{x:Bind ViewModel.Calls.TranscriptEditLabel, Mode=OneWay}"
+                                                            Command="{x:Bind ViewModel.Calls.ToggleTranscriptEditingCommand}" />
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem Text="Language and speaker options…" Click="CallsTranscriptionOptions_Click" />
+                                        </MenuFlyout>
+                                    </DropDownButton.Flyout>
+                                </DropDownButton>
+                            </StackPanel>
+                            <StackPanel x:Name="CallsPrimaryActions" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button Content="＋ Record" Command="{x:Bind ViewModel.Calls.CreateRecordingCommand}"
+                                        Visibility="{x:Bind ViewModel.Calls.StartRecordingVisibility, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.Calls.CanConfigureAudio, Mode=OneWay}" />
+                                <Button Content="■ Stop" Command="{x:Bind ViewModel.Calls.StopRecordingCommand}"
+                                        Visibility="{x:Bind ViewModel.Calls.StopRecordingVisibility, Mode=OneWay}" Style="{StaticResource DangerButtonStyle}" />
+                                <Button Content="{x:Bind ViewModel.Calls.GenerateNotesLabel, Mode=OneWay}" Command="{x:Bind ViewModel.Calls.GenerateReportCommand}"
+                                        IsEnabled="{x:Bind ViewModel.Calls.CanGenerateNotes, Mode=OneWay}" Style="{StaticResource NeonButtonStyle}"
+                                        ToolTipService.ToolTip="Generate notes (Ctrl+Enter)" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.Calls.Status, Mode=OneWay}" TextWrapping="Wrap" MaxLines="2"
+                                   FontSize="12" Foreground="{StaticResource TextMutedBrush}" AutomationProperties.LiveSetting="Polite" />
+                    </Grid>
                 </Grid>
             </Grid>
-
-            <Button Grid.Row="0" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,56,18,0" Content="■ Stop recording"
-                    Command="{x:Bind ViewModel.Calls.StopRecordingCommand}"
-                    Visibility="{x:Bind ViewModel.Calls.StopRecordingVisibility, Mode=OneWay}"
-                    Style="{StaticResource DangerButtonStyle}" />
-
             <!-- Empty State (also hosts the app launcher when search yields no windows) -->
             <Grid
                 x:Name="EmptyStatePanel"

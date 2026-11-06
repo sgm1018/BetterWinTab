@@ -31,17 +31,9 @@ public partial class CallsViewModel : ObservableObject
     private readonly AppSettings _appSettings;
     private readonly SettingsService _settingsService;
     private readonly AsrModelStore _asrModelStore = new();
-    private readonly TranscriptionService _transcription;
     private readonly DispatcherQueue? _dispatcher = DispatcherQueue.GetForCurrentThread();
     private CancellationTokenSource? _captureLifetime;
     private string? _activeRecordingId;
-    private Channel<LiveAudioChunk>? _liveAudioChunks;
-    private Task? _liveAudioProcessor;
-    private Task? _microphoneChunkProducer;
-    private Task? _loopbackChunkProducer;
-    private readonly List<AudioTranscriptSegment> _liveTranscriptSegments = new();
-    private readonly object _liveTranscriptLock = new();
-    private int _liveTranscriptionHadErrors;
 
     public ObservableCollection<AudioDeviceInfo> Microphones { get; } = new();
     public ObservableCollection<AudioDeviceInfo> Outputs { get; } = new();
@@ -50,7 +42,8 @@ public partial class CallsViewModel : ObservableObject
     public ObservableCollection<string> Languages { get; } = new();
     public ObservableCollection<string> VisibleLanguages { get; } = new();
     public ObservableCollection<ChatModel> ChatModels { get; } = new();
-    public IReadOnlyList<BetterWinTab.Models.Transcription.AsrModel> AsrModels { get; } = BetterWinTab.Models.Transcription.AsrModelCatalog.Models;
+    public IReadOnlyList<BetterWinTab.Models.Transcription.AsrModel> AsrModels { get; } =
+        BetterWinTab.Models.Transcription.AsrModelCatalog.Models.Where(model => model.ExecutionMode == AsrExecutionMode.TrueStreaming).ToArray();
     public IReadOnlyList<BetterWinTab.Models.Transcription.DiarizationModelAsset> DiarizationModels { get; } = BetterWinTab.Models.Transcription.DiarizationModelCatalog.RequiredAssets;
     public IReadOnlyList<ChatProviderDescriptor> Providers { get; } = ChatProviderCatalog.Providers;
     public IReadOnlyList<ReportTemplate> Templates { get; } =
@@ -77,6 +70,7 @@ public partial class CallsViewModel : ObservableObject
     ];
 
     [ObservableProperty] private AudioDeviceInfo? _selectedMicrophone;
+    [ObservableProperty] private bool _includeMicrophone;
     [ObservableProperty] private AudioDeviceInfo? _selectedOutput;
     [ObservableProperty] private AudioRecordingMetadata? _selectedRecording;
     [ObservableProperty] private GeneratedDocument? _selectedReport;
@@ -106,10 +100,11 @@ public partial class CallsViewModel : ObservableObject
     public Visibility CountdownVisibility => CountdownSeconds > 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TranscriptEmptyVisibility => string.IsNullOrWhiteSpace(TranscriptText) ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ManualLanguageVisibility => IsManualLanguage ? Visibility.Visible : Visibility.Collapsed;
+    public bool CanIncludeMicrophone => Microphones.Count > 0;
     public Visibility ProviderModelPickerVisibility => ProviderId.Equals("openrouter", StringComparison.OrdinalIgnoreCase) ? Visibility.Collapsed : Visibility.Visible;
     public Visibility OpenRouterModelHintVisibility => ProviderModelPickerVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
     public string DiarizationStatus => BetterWinTab.Models.Transcription.DiarizationModelCatalog.CurrentTranscriptCapability;
-    public bool IsAsrModelInstalled => _asrModelStore.IsInstalled(AsrModels.First(m => m.Id == "moonshine-v2-base-es"));
+    public bool IsAsrModelInstalled => _asrModelStore.IsStreamingInstalled;
     public Visibility ReportEmptyVisibility => string.IsNullOrWhiteSpace(ReportText) ? Visibility.Visible : Visibility.Collapsed;
     public string TranscriptContent => !string.IsNullOrWhiteSpace(TranscriptText) ? TranscriptText : SelectedRecording?.Transcript.Count > 0
         ? string.Join(Environment.NewLine + Environment.NewLine, SelectedRecording.Transcript.Select(s =>
@@ -121,6 +116,8 @@ public partial class CallsViewModel : ObservableObject
         GeneratedDocumentStore documents, CredentialStore credentials,
         AppSettings appSettings, SettingsService settingsService)
     {
+        InitializeTranscriptPresentation();
+        InitializeCallsWorkspace();
         _capture = capture;
         _devices = devices;
         _recordings = recordings;
@@ -129,8 +126,8 @@ public partial class CallsViewModel : ObservableObject
         _credentials = credentials;
         _appSettings = appSettings;
         _settingsService = settingsService;
-        _transcription = new TranscriptionService([new SherpaOfflineWorkerEngine(_asrModelStore)]);
         _appSettings.Calls ??= new CallsSettings();
+        IncludeMicrophone = _appSettings.Calls.IncludeMicrophone;
         ProviderId = _appSettings.Calls.ProviderId;
         ModelId = _appSettings.Calls.ModelId;
         IsManualLanguage = _appSettings.Calls.ManualLanguage;
@@ -144,9 +141,11 @@ public partial class CallsViewModel : ObservableObject
         RefreshVisibleLanguages();
         SelectedAsrModel = AsrModels.FirstOrDefault();
         SelectedAsrModel = AsrModels.FirstOrDefault(m => m.Id == _appSettings.Calls.AsrModelId) ?? SelectedAsrModel;
+        var savedMicrophoneId = _appSettings.Calls.MicrophoneDeviceId;
+        var savedOutputId = _appSettings.Calls.OutputDeviceId;
         RefreshDevices();
-        SelectedMicrophone = Microphones.FirstOrDefault(m => m.Id == _appSettings.Calls.MicrophoneDeviceId) ?? SelectedMicrophone;
-        SelectedOutput = Outputs.FirstOrDefault(m => m.Id == _appSettings.Calls.OutputDeviceId) ?? SelectedOutput;
+        SelectedMicrophone = Microphones.FirstOrDefault(m => m.Id == savedMicrophoneId) ?? SelectedMicrophone;
+        SelectedOutput = Outputs.FirstOrDefault(m => m.Id == savedOutputId) ?? SelectedOutput;
         SelectedLanguage = IsManualLanguage
             ? Languages.FirstOrDefault(language => language.EndsWith($"({_appSettings.Calls.Locale})", StringComparison.OrdinalIgnoreCase)) ?? "Automatic"
             : "Automatic";
@@ -158,6 +157,7 @@ public partial class CallsViewModel : ObservableObject
         ModelCatalogStatus = ProviderId.Equals("openrouter", StringComparison.OrdinalIgnoreCase)
             ? "Enter any OpenRouter model ID directly (for example, provider/model)."
             : "Model suggestions reviewed 22 Oct 2026. Availability can vary by account; you can enter another model ID below.";
+        SaveCallSettings();
     }
 
     private void RefreshVisibleLanguages()
@@ -174,12 +174,20 @@ public partial class CallsViewModel : ObservableObject
         Outputs.Clear();
         try
         {
-            foreach (var item in _devices.EnumerateMicrophones()) Microphones.Add(item);
-            foreach (var item in _devices.EnumerateLoopbackDevices()) Outputs.Add(item);
+            foreach (var item in _devices.EnumerateMicrophones().Where(device => !device.RequiresHandsFreeProfile)) Microphones.Add(item);
+            foreach (var item in _devices.EnumerateLoopbackDevices().Where(device => !device.RequiresHandsFreeProfile)) Outputs.Add(item);
         }
         catch (Exception ex) { Status = $"Audio devices are unavailable: {ex.Message}"; }
         SelectedMicrophone = Microphones.FirstOrDefault(d => d.IsDefault) ?? Microphones.FirstOrDefault();
         SelectedOutput = Outputs.FirstOrDefault(d => d.IsDefault) ?? Outputs.FirstOrDefault();
+        if (!CanIncludeMicrophone) IncludeMicrophone = false;
+        OnPropertyChanged(nameof(CanIncludeMicrophone));
+    }
+
+    [RelayCommand]
+    private void RefreshAudioDevices()
+    {
+        if (!IsRecording && !_isStartingRecording) RefreshDevices();
     }
 
     private async Task LoadAsync()
@@ -188,7 +196,7 @@ public partial class CallsViewModel : ObservableObject
         {
             var items = await _recordings.GetAllAsync();
             var docs = await _documents.ListAsync();
-            _dispatcher?.TryEnqueue(() =>
+            await RunOnUiAsync(() =>
             {
                 var selectedId = SelectedRecording?.Id;
                 Recordings.Clear(); foreach (var item in items) Recordings.Add(item);
@@ -197,101 +205,6 @@ public partial class CallsViewModel : ObservableObject
             });
         }
         catch (Exception ex) { Status = $"Could not load recordings: {ex.Message}"; }
-    }
-
-    [RelayCommand]
-    private async Task CreateRecordingAsync()
-    {
-        if (IsRecording || CountdownSeconds > 0) return;
-        _captureLifetime = new CancellationTokenSource();
-        try
-        {
-            for (var remaining = 3; remaining > 0; remaining--)
-            {
-                CountdownSeconds = remaining;
-                await Task.Delay(1000, _captureLifetime.Token);
-            }
-            CountdownSeconds = 0;
-            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BetterWinTab", "recordings", Guid.NewGuid().ToString("N"));
-            await _capture.StartAsync(new AudioCaptureOptions
-            {
-                MicrophoneDeviceId = SelectedMicrophone?.Id,
-                LoopbackDeviceId = SelectedOutput?.Id,
-                RecordingDirectory = directory
-            }, _captureLifetime.Token);
-            var metadata = await _recordings.CreateAsync(SelectedMicrophone?.Id, SelectedOutput?.Id,
-                cancellationToken: _captureLifetime.Token,
-                microphoneAudioFilePath: _capture.MicrophoneRecordingPath,
-                loopbackAudioFilePath: _capture.LoopbackRecordingPath);
-            _activeRecordingId = metadata.Id;
-            RecordingTitle = $"Recording {metadata.StartedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm}";
-            IsRecording = true;
-            StartLiveTranscription(metadata.Id, directory, _captureLifetime.Token);
-            Recordings.Insert(0, metadata);
-            SelectedRecording = metadata;
-        }
-        catch (OperationCanceledException) { Status = "Recording cancelled."; }
-        catch (Exception ex)
-        {
-            if (_capture.IsCapturing) await _capture.StopAsync();
-            CountdownSeconds = 0;
-            Status = $"Could not start recording: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    public async Task StopRecordingAsync()
-    {
-        if (_capture.IsCapturing) await _capture.StopAsync();
-        var completedRecordingId = _activeRecordingId;
-        IsRecording = false;
-        CountdownSeconds = 0;
-        Exception? liveCaptureError = null;
-        if (_microphoneChunkProducer != null && _loopbackChunkProducer != null)
-        {
-            try { await Task.WhenAll(_microphoneChunkProducer, _loopbackChunkProducer); }
-            catch (Exception ex) { liveCaptureError = ex; }
-            finally { _liveAudioChunks?.Writer.TryComplete(); }
-            if (_liveAudioProcessor != null)
-            {
-                try { await _liveAudioProcessor; }
-                catch (Exception ex) { liveCaptureError ??= ex; }
-            }
-            IsTranscribing = false;
-        }
-        if (completedRecordingId != null)
-        {
-            await _recordings.CompleteAsync(completedRecordingId);
-            _activeRecordingId = null;
-        }
-        lock (_liveTranscriptLock)
-            _liveTranscriptSegments.Clear();
-        Status = _capture.RecordingWriteError == null ? "Recording saved" : $"Audio saved with a write warning: {_capture.RecordingWriteError.Message}";
-        await LoadAsync();
-        if (completedRecordingId != null)
-        {
-            if (SelectedAsrModel?.Id != "moonshine-v2-base-es")
-                Status = "Recording saved. The selected model has no configured worker; choose Moonshine Spanish Base.";
-            else if (IsAsrModelInstalled)
-            {
-                if (_liveAudioProcessor == null || liveCaptureError != null || Volatile.Read(ref _liveTranscriptionHadErrors) != 0)
-                    await TranscribeRecordingAsync(completedRecordingId);
-                else
-                {
-                    var saved = await _recordings.GetAsync(completedRecordingId);
-                    Status = saved?.Transcript.Count > 0
-                        ? "Recording saved. Live transcription is complete."
-                        : "Recording saved. No speech was recognized in the selected microphone or system audio.";
-                }
-            }
-            else
-                Status = "Recording saved with both audio tracks. Download or import Moonshine Spanish Base to transcribe it; speech was not transcribed during this recording.";
-        }
-        _liveAudioChunks = null;
-        _liveAudioProcessor = null;
-        _microphoneChunkProducer = null;
-        _loopbackChunkProducer = null;
     }
 
     [RelayCommand]
@@ -306,6 +219,10 @@ public partial class CallsViewModel : ObservableObject
     {
         if (SelectedRecording == null || IsGeneratingReport) return;
         var transcript = TranscriptContent;
+        var recordingId = SelectedRecording.Id;
+        var title = RecordingTitle;
+        var providerId = ProviderId;
+        var modelId = ModelId;
         if (string.IsNullOrWhiteSpace(transcript))
         {
             Status = "Add or transcribe the recording before generating a report.";
@@ -314,39 +231,54 @@ public partial class CallsViewModel : ObservableObject
         try
         {
             IsGeneratingReport = true;
+            _generatingRecordingId = recordingId;
+            _draftReport = string.Empty;
+            SelectedReport = null;
+            ReportText = string.Empty;
+            Status = "Generating notes…";
             if (!string.IsNullOrWhiteSpace(ApiKey))
                 _credentials.SetApiKey(ProviderId, ApiKey);
             var template = Templates.FirstOrDefault(t => t.Id == SelectedTemplateId) ?? ReportTemplate.MeetingNotes;
             if (!string.IsNullOrWhiteSpace(CustomPrompt))
                 template = template with
                 {
-                    Id = "custom",
-                    Name = "Custom request",
-                    SystemPrompt = "Create a useful report grounded only in the provided transcript. Do not invent details.",
-                    UserPromptTemplate = CustomPrompt.Trim() + "\n\nRecording: {title}\n\nTranscript:\n{transcript}"
+                    UserPromptTemplate = template.UserPromptTemplate + "\n\nAdditional instructions: " + CustomPrompt.Trim()
                 };
-            var generated = (await _reports.GenerateAsync(RecordingTitle, transcript, template, ProviderId, ModelId))
-                with { RecordingId = SelectedRecording.Id };
+            template = template with { SystemPrompt = template.SystemPrompt + " Format the response as Markdown with clear headings and lists where useful. Do not wrap the entire response in a code fence." };
+            var progress = new Progress<string>(delta => _ = RunOnUiAsync(() =>
+            {
+                if (_generatingRecordingId != recordingId) return;
+                _draftReport += delta;
+                if (SelectedRecording?.Id == recordingId) ReportText = _draftReport;
+            }));
+            var generated = (await _reports.GenerateAsync(title, transcript, template, providerId, modelId, progress))
+                with { RecordingId = recordingId };
             await _documents.SaveAsync(generated);
+            _generatingRecordingId = null;
             Reports.Insert(0, generated);
-            SelectedReport = generated;
-            ReportText = generated.Content;
+            if (SelectedRecording?.Id == recordingId)
+            {
+                SelectedReport = generated;
+                ReportText = generated.Content;
+            }
             Status = "Report generated and saved.";
         }
         catch (Exception ex) { Status = $"Report generation failed: {ex.Message}"; }
-        finally { IsGeneratingReport = false; }
+        finally { _generatingRecordingId = null; IsGeneratingReport = false; }
     }
 
     partial void OnSelectedRecordingChanged(AudioRecordingMetadata? value)
     {
+        LoadTranscriptMessages(value?.Transcript ?? Enumerable.Empty<AudioTranscriptSegment>());
         TranscriptText = value?.Transcript.Count > 0
-            ? string.Join(Environment.NewLine + Environment.NewLine, value.Transcript.Select(s => $"{s.Speaker ?? "Speaker"}: {s.Text}"))
+            ? TranscriptTextEditor.Format(value.Transcript)
             : string.Empty;
         OnPropertyChanged(nameof(TranscriptContent));
         RecordingTitle = value == null ? string.Empty : $"Recording {value.StartedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm}";
+        RefreshCurrentReports();
         var report = Reports.FirstOrDefault(d => d.RecordingId == value?.Id);
         SelectedReport = report;
-        ReportText = report?.Content ?? string.Empty;
+        ReportText = _generatingRecordingId == value?.Id && value != null ? _draftReport : report?.Content ?? string.Empty;
     }
 
     partial void OnSelectedReportChanged(GeneratedDocument? value) => ReportText = value?.Content ?? string.Empty;
@@ -357,6 +289,7 @@ public partial class CallsViewModel : ObservableObject
     partial void OnLanguageSearchChanged(string value) => RefreshVisibleLanguages();
 
     partial void OnSelectedMicrophoneChanged(AudioDeviceInfo? value) { _appSettings.Calls.MicrophoneDeviceId = value?.Id; SaveCallSettings(); }
+    partial void OnIncludeMicrophoneChanged(bool value) { _appSettings.Calls.IncludeMicrophone = value; SaveCallSettings(); }
     partial void OnSelectedOutputChanged(AudioDeviceInfo? value) { _appSettings.Calls.OutputDeviceId = value?.Id; SaveCallSettings(); }
     partial void OnSelectedAsrModelChanged(BetterWinTab.Models.Transcription.AsrModel? value)
     { if (value != null) _appSettings.Calls.AsrModelId = value.Id; SaveCallSettings(); }
@@ -413,12 +346,8 @@ public partial class CallsViewModel : ObservableObject
     [RelayCommand]
     private async Task ImportAsrModelAsync()
     {
-        var model = SelectedAsrModel ?? AsrModels.First(m => m.Id == "moonshine-v2-base-es");
-        if (model.Id != "moonshine-v2-base-es")
-        {
-            Status = "Only Moonshine Spanish Base can be installed by this worker.";
-            return;
-        }
+        if (IsRecording || IsTranscribing || IsInstallingAsrModel || CountdownSeconds > 0) return;
+        var model = SelectedAsrModel ?? AsrModels[0];
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add(".zip");
         picker.FileTypeFilter.Add(".bz2");
@@ -427,220 +356,57 @@ public partial class CallsViewModel : ObservableObject
         if (file == null) return;
         try
         {
+            IsInstallingAsrModel = true;
             Status = "Installing the local ASR model…";
             await _asrModelStore.InstallArchiveAsync(model, file.Path);
-            OnPropertyChanged(nameof(IsAsrModelInstalled));
-            if (SelectedRecording?.EndedAtUtc != null)
-                await TranscribeRecordingAsync(SelectedRecording.Id);
-            else
-                Status = "Moonshine Spanish Base is installed. Transcription will run after recording stops.";
+            await _asrModelStore.EnsureStreamingModelsAsync(new Progress<string>(message => Status = message));
+            Status = "Speech and speaker models are ready.";
         }
         catch (Exception ex) { Status = $"Could not install ASR model: {ex.Message}"; }
+        finally { IsInstallingAsrModel = false; OnPropertyChanged(nameof(IsAsrModelInstalled)); }
     }
 
     [RelayCommand]
     private async Task DownloadAsrModelAsync()
     {
-        var model = SelectedAsrModel;
-        if (model == null) return;
-        if (model.Id != "moonshine-v2-base-es")
-        {
-            Status = "Only Moonshine Spanish Base has a verified download and configured worker.";
-            return;
-        }
+        if (IsRecording || IsTranscribing || IsInstallingAsrModel || CountdownSeconds > 0) return;
         try
         {
-            IsInstallingAsrModel = true;
-            Status = $"Downloading and installing {model.DisplayName}… This model is about {model.ApproximateDownloadSize}.";
-            await _asrModelStore.DownloadAndInstallAsync(model);
-            OnPropertyChanged(nameof(IsAsrModelInstalled));
-            Status = $"{model.DisplayName} is ready. New recordings will show live transcription.";
-            if (SelectedRecording?.EndedAtUtc != null)
-                await TranscribeRecordingAsync(SelectedRecording.Id);
+            await PrepareSpeechModelsAsync(CancellationToken.None);
+            Status = "Speech and speaker models are ready. Start a recording to see words as they are recognized.";
         }
         catch (Exception ex) { Status = $"Could not download or install the speech model: {ex.Message}"; }
-        finally { IsInstallingAsrModel = false; }
     }
 
-    private async Task TranscribeRecordingAsync(string recordingId)
+    private Task RunOnUiAsync(Action action)
     {
-        var item = await _recordings.GetAsync(recordingId);
-        if (item == null) return;
-        var options = new TranscriptionOptions(IsManualLanguage ? LanguageSelectionMode.Manual : LanguageSelectionMode.Automatic,
-            IsManualLanguage ? _appSettings.Calls.Locale : null);
-        var segments = new List<AudioTranscriptSegment>();
-        var failures = new List<string>();
-        IsTranscribing = true;
-        try
+        if (_dispatcher == null || _dispatcher.HasThreadAccess)
         {
-            foreach (var track in new[]
-                     {
-                         (Path: item.MicrophoneAudioFilePath, Speaker: "You"),
-                         (Path: item.LoopbackAudioFilePath, Speaker: "Call audio")
-                     })
-            {
-                if (string.IsNullOrWhiteSpace(track.Path) || !File.Exists(track.Path)) continue;
-                Status = $"Transcribing {track.Speaker} audio offline…";
-                try
-                {
-                    var transcript = await _transcription.TranscribeWaveFileAsync("moonshine-v2-base-es", track.Path, options);
-                    segments.AddRange(transcript.Segments.Select(segment => new AudioTranscriptSegment
-                    {
-                        StartSeconds = segment.Start.TotalSeconds,
-                        DurationSeconds = segment.End.TotalSeconds - segment.Start.TotalSeconds,
-                        Speaker = track.Speaker,
-                        Text = segment.Text
-                    }));
-                }
-                catch (Exception ex) { failures.Add($"{track.Speaker}: {ex.Message}"); }
-            }
-
-            if (segments.Count == 0)
-            {
-                Status = "No speech was returned for the recorded tracks.";
-                return;
-            }
-            await _recordings.SetTranscriptAsync(item.Id, segments);
-            var updated = await _recordings.GetAsync(item.Id);
-            if (updated != null) SelectedRecording = updated;
-            TranscriptText = string.Join(Environment.NewLine + Environment.NewLine,
-                segments.Select(segment => $"{segment.Speaker}: {segment.Text}"));
-            Status = failures.Count > 0
-                ? $"Some tracks could not be transcribed: {string.Join("; ", failures)}"
-                : "Offline transcription saved. Tracks are labeled by source; callers within call audio are not diarized.";
+            action();
+            return Task.CompletedTask;
         }
-        catch (Exception ex) { Status = $"Offline transcription failed: {ex.Message}"; }
-        finally { IsTranscribing = false; }
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_dispatcher.TryEnqueue(() =>
+            {
+                try { action(); completion.SetResult(); }
+                catch (Exception ex) { completion.SetException(ex); }
+            }))
+            completion.SetException(new InvalidOperationException("The recording window is no longer available."));
+        return completion.Task;
     }
 
-    private void StartLiveTranscription(string recordingId, string recordingDirectory, CancellationToken cancellationToken)
+    [RelayCommand]
+    private async Task TranscribeSelectedRecordingAsync()
     {
-        Interlocked.Exchange(ref _liveTranscriptionHadErrors, 0);
-        lock (_liveTranscriptLock)
-            _liveTranscriptSegments.Clear();
-
+        var recording = SelectedRecording;
+        if (recording == null || !CanTranscribeRecording || IsInstallingAsrModel || _isFinalizingRecording) return;
         if (!IsAsrModelInstalled)
         {
-            _microphoneChunkProducer = DrainPacketsAsync(_capture.ReadMicrophonePacketsAsync(cancellationToken), cancellationToken);
-            _loopbackChunkProducer = DrainPacketsAsync(_capture.ReadLoopbackPacketsAsync(cancellationToken), cancellationToken);
-            Status = "Recording microphone and system audio. Install Moonshine Spanish Base from this panel to enable live transcription.";
-            return;
+            await DownloadAsrModelAsync();
+            if (!IsAsrModelInstalled) return;
         }
-
-        var microphoneFormat = _capture.MicrophoneWaveFormat;
-        var loopbackFormat = _capture.LoopbackWaveFormat;
-        if (microphoneFormat == null || loopbackFormat == null)
-            throw new InvalidOperationException("The selected audio devices did not expose a recording format.");
-
-        _liveAudioChunks = Channel.CreateUnbounded<LiveAudioChunk>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false
-        });
-        _liveAudioProcessor = ProcessLiveAudioChunksAsync(_liveAudioChunks.Reader, recordingId, cancellationToken);
-        IsTranscribing = true;
-
-        _microphoneChunkProducer = CaptureLiveChunksAsync(_capture.ReadMicrophonePacketsAsync(cancellationToken),
-            microphoneFormat, AudioCaptureSource.Microphone, recordingDirectory, _liveAudioChunks.Writer, cancellationToken);
-        _loopbackChunkProducer = CaptureLiveChunksAsync(_capture.ReadLoopbackPacketsAsync(cancellationToken),
-            loopbackFormat, AudioCaptureSource.Loopback, recordingDirectory, _liveAudioChunks.Writer, cancellationToken);
-        Status = "Recording microphone and system audio. Live transcription updates every 8 seconds.";
+        await TranscribeRecordingAsync(recording.Id);
     }
-
-    private static async Task DrainPacketsAsync(IAsyncEnumerable<AudioCapturePacket> packets, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await foreach (var _ in packets.WithCancellation(cancellationToken).ConfigureAwait(false)) { }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-    }
-
-    private async Task CaptureLiveChunksAsync(IAsyncEnumerable<AudioCapturePacket> packets, WaveFormat format,
-        AudioCaptureSource source, string directory, ChannelWriter<LiveAudioChunk> writer, CancellationToken cancellationToken)
-    {
-        var chunker = new AudioChunkBuffer(format.AverageBytesPerSecond, chunkSeconds: 8, blockAlign: format.BlockAlign);
-        var speaker = source == AudioCaptureSource.Microphone ? "You" : "Call audio";
-        var chunkIndex = 0;
-        var startSeconds = 0d;
-        await foreach (var packet in packets.WithCancellation(cancellationToken).ConfigureAwait(false))
-        {
-            foreach (var bytes in chunker.Push(packet.Data))
-                await QueueLiveChunkAsync(bytes, format, source, speaker, directory, writer, chunkIndex++, startSeconds, cancellationToken);
-            startSeconds = chunkIndex * 8d;
-        }
-
-        var remainder = chunker.Flush();
-        if (remainder is { Length: > 0 })
-            await QueueLiveChunkAsync(remainder, format, source, speaker, directory, writer, chunkIndex, startSeconds, cancellationToken);
-    }
-
-    private static async Task QueueLiveChunkAsync(byte[] bytes, WaveFormat format, AudioCaptureSource source, string speaker,
-        string directory, ChannelWriter<LiveAudioChunk> writer, int index, double startSeconds, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var path = Path.Combine(directory, $"live-{source.ToString().ToLowerInvariant()}-{index:D6}.wav");
-        using (var wave = new WaveFileWriter(path, format))
-            wave.Write(bytes, 0, bytes.Length);
-        var duration = bytes.Length / (double)format.AverageBytesPerSecond;
-        await writer.WriteAsync(new LiveAudioChunk(path, speaker, startSeconds, duration), cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task ProcessLiveAudioChunksAsync(ChannelReader<LiveAudioChunk> reader, string recordingId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await foreach (var chunk in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-            {
-                try
-                {
-                    var options = new TranscriptionOptions(IsManualLanguage ? LanguageSelectionMode.Manual : LanguageSelectionMode.Automatic,
-                        IsManualLanguage ? _appSettings.Calls.Locale : null);
-                    var transcript = await _transcription.TranscribeWaveFileAsync("moonshine-v2-base-es", chunk.Path, options, cancellationToken);
-                    var newSegments = transcript.Segments
-                        .Where(segment => !string.IsNullOrWhiteSpace(segment.Text))
-                        .Select(segment => new AudioTranscriptSegment
-                        {
-                            StartSeconds = chunk.StartSeconds + segment.Start.TotalSeconds,
-                            DurationSeconds = segment.End.TotalSeconds - segment.Start.TotalSeconds,
-                            Speaker = chunk.Speaker,
-                            Text = segment.Text.Trim()
-                        }).ToArray();
-                    if (newSegments.Length == 0) continue;
-
-                    AudioTranscriptSegment[] snapshot;
-                    lock (_liveTranscriptLock)
-                    {
-                        _liveTranscriptSegments.AddRange(newSegments);
-                        snapshot = _liveTranscriptSegments.OrderBy(segment => segment.StartSeconds).ToArray();
-                    }
-                    await _recordings.SetTranscriptAsync(recordingId, snapshot, cancellationToken);
-                    var text = string.Join(Environment.NewLine + Environment.NewLine,
-                        snapshot.Select(segment => $"{segment.Speaker}: {segment.Text}"));
-                    _dispatcher?.TryEnqueue(() =>
-                    {
-                        if (SelectedRecording?.Id == recordingId)
-                            TranscriptText = text;
-                        if (_activeRecordingId == recordingId)
-                            Status = $"Recording and transcribing live. {snapshot.Length} speech segment(s) added.";
-                    });
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                catch (Exception ex)
-                {
-                    Interlocked.Exchange(ref _liveTranscriptionHadErrors, 1);
-                    _dispatcher?.TryEnqueue(() => Status = $"Recording continues, but a live audio chunk could not be transcribed: {ex.Message}");
-                }
-                finally
-                {
-                    try { File.Delete(chunk.Path); } catch (IOException) { }
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-    }
-
-    private sealed record LiveAudioChunk(string Path, string Speaker, double StartSeconds, double DurationSeconds);
 
     [RelayCommand]
     private void SaveApiKey()
@@ -658,13 +424,10 @@ public partial class CallsViewModel : ObservableObject
     [RelayCommand]
     private async Task SaveTranscriptAsync()
     {
-        if (SelectedRecording == null || string.IsNullOrWhiteSpace(TranscriptText)) return;
-        var segments = new[] { new AudioTranscriptSegment
-        {
-            StartSeconds = 0,
-            DurationSeconds = 0,
-            Text = TranscriptText.Trim()
-        } };
+        if (SelectedRecording == null || IsRecording || IsTranscribing || _isFinalizingRecording || string.IsNullOrWhiteSpace(TranscriptText)) return;
+        var savedText = TranscriptTextEditor.Format(SelectedRecording.Transcript);
+        if (TranscriptText == savedText) return;
+        var segments = TranscriptTextEditor.ApplyEdit(SelectedRecording.Transcript, TranscriptText);
         await _recordings.SetTranscriptAsync(SelectedRecording.Id, segments);
         var refreshed = await _recordings.GetAsync(SelectedRecording.Id);
         if (refreshed != null) SelectedRecording = refreshed;
@@ -674,7 +437,7 @@ public partial class CallsViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteRecordingAsync()
     {
-        if (SelectedRecording == null || SelectedRecording.Id == _activeRecordingId) return;
+        if (SelectedRecording == null || IsTranscribing || _isFinalizingRecording || SelectedRecording.Id == _activeRecordingId) return;
         var item = SelectedRecording;
         await _recordings.DeleteAsync(item.Id);
         foreach (var path in new[] { item.MicrophoneAudioFilePath, item.LoopbackAudioFilePath }.Where(p => !string.IsNullOrWhiteSpace(p)))

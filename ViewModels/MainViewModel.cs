@@ -431,7 +431,7 @@ public partial class MainViewModel : BaseViewModel
     }
 
     // Launch panel visibility helpers
-    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && _searchFilter != SearchFilter.Apps && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && !IsCallsFolderSelected && _searchFilter is not (SearchFilter.Apps or SearchFilter.Calls) && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowLaunchSuggestions =>
         (_searchFilter is SearchFilter.All or SearchFilter.Apps) && IsSearchActive &&
         Windows.Count == 0 && LaunchResults.Count > 0 && !ShowRecycleBinSuggestion
@@ -863,6 +863,18 @@ public partial class MainViewModel : BaseViewModel
         var q = SearchQuery.Trim();
 
         ShowRecycleBinSuggestion = RecycleBinMatcher.Matches(q);
+
+        if (_searchFilter == SearchFilter.Calls || IsCallsFolderSelected)
+        {
+            CancelSemanticSearch();
+            Windows.Clear();
+            LaunchResults.Clear();
+            SelectedWindow = null;
+            HasNoWindows = Visibility.Collapsed;
+            NotifySearchStateChanged();
+            WindowsRefreshed?.Invoke();
+            return;
+        }
 
         if (_searchFilter == SearchFilter.Notes)
         {

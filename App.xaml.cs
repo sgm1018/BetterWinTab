@@ -191,15 +191,19 @@ namespace BetterWinTab
             }
         }
 
-        public void ExitApplication()
+        private bool _isExiting;
+
+        public async void ExitApplication()
         {
+            if (_isExiting) return;
+            _isExiting = true;
             try
             {
                 if (_window?.Content is Frame frame && frame.Content is Views.MainPage page)
                 {
                     page.StopNotesBridge();
                     page.OnOverlayHidden();
-                    page.ViewModel.Calls.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    await page.ViewModel.Calls.DisposeAsync();
                 }
             }
             catch
@@ -237,7 +241,7 @@ namespace BetterWinTab
 
             try
             {
-                ServiceContainer.Resolve<AudioCaptureService>().DisposeAsync().AsTask().GetAwaiter().GetResult();
+                await ServiceContainer.Resolve<AudioCaptureService>().DisposeAsync();
             }
             catch
             {

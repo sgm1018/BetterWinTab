@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <!-- Exercise the same publish settings as the shipped x64 app. -->
+  <Import Project="../../Properties/PublishProfiles/win-x64.pubxml" />
+  <ItemGroup>
+    <Compile Include="../../Models/Note.cs" Link="Note.cs" />
+    <Compile Include="../../Models/NoteFolder.cs" Link="NoteFolder.cs" />
+    <Compile Include="../../Services/NotesService.cs" Link="NotesService.cs" />
+  </ItemGroup>
+</Project>

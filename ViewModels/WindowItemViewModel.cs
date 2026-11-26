@@ -35,6 +35,7 @@ public partial class WindowItemViewModel : BaseViewModel
 
     /// <summary>True when the window is on the currently active virtual desktop.</summary>
     public bool IsOnCurrentDesktop { get; }
+    public bool CanBringToCurrentDesktop => !IsOnCurrentDesktop && Model.Handle != IntPtr.Zero;
 
     /// <summary>Display label for the badge, e.g. "Desktop 2".</summary>
     public string DesktopBadge { get; }

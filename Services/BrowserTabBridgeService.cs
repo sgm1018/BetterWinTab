@@ -13,7 +13,6 @@ namespace BetterWinTab.Services;
 public sealed class BrowserTabBridgeService : IDisposable
 {
     private const string PipeName = "BetterWinTab.BrowserTabs";
-    private readonly WindowEnumerationService _windowService;
     private readonly ConcurrentDictionary<string, BrowserConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentDictionary<string, List<BridgeTab>> _tabs = new(StringComparer.OrdinalIgnoreCase);
@@ -36,13 +35,12 @@ public sealed class BrowserTabBridgeService : IDisposable
         return string.Join(" · ", states);
     }
 
-    public BrowserTabBridgeService(WindowEnumerationService windowService)
+    public BrowserTabBridgeService()
     {
-        _windowService = windowService;
         _ = AcceptConnectionsAsync();
     }
 
-    public List<WindowInfo> GetTabs(BrowserTabSettings settings)
+    public List<WindowInfo> GetTabs(BrowserTabSettings settings, IReadOnlyList<WindowInfo> windows)
     {
         if (!settings.Enabled) return new List<WindowInfo>();
 
@@ -55,32 +53,45 @@ public sealed class BrowserTabBridgeService : IDisposable
         foreach (var pair in _tabs)
         {
             if (!enabledBrowsers.Contains(pair.Key)) continue;
-            foreach (var tab in pair.Value)
-            {
-                var browserProcess = ProcessNameFor(pair.Key);
-                var window = FindBrowserWindow(browserProcess, tab.BrowserProcessId, tab.Title);
-                if (window == null) continue;
 
-                result.Add(new WindowInfo
+            var browserProcess = ProcessNameFor(pair.Key);
+            var browserWindows = windows
+                .Where(window => window.ProcessName.Equals(browserProcess, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var groups = pair.Value.GroupBy(tab => tab.WindowId).ToList();
+            var matches = groups.Select(tabs =>
+                (Tabs: tabs, Window: FindBrowserWindow(browserWindows, tabs, groups.Count == 1))).ToList();
+
+            foreach (var (tabs, match) in matches)
+            {
+                // Keep ambiguous tabs searchable and let Chromium activate them, but don't
+                // associate them with an HWND that might belong to a different browser window.
+                var window = match != null && matches.Count(other => other.Window?.Handle == match.Handle) == 1
+                    ? match
+                    : null;
+                foreach (var tab in tabs)
                 {
-                    Handle = window.Handle,
-                    Title = string.IsNullOrWhiteSpace(tab.Title) ? tab.Url : tab.Title,
-                    ProcessName = browserProcess,
-                    ProcessId = window.ProcessId,
-                    ClassName = window.ClassName,
-                    IsMinimized = window.IsMinimized,
-                    IsOnCurrentDesktop = window.IsOnCurrentDesktop,
-                    DesktopId = window.DesktopId,
-                    DesktopNumber = window.DesktopNumber,
-                    DesktopName = window.DesktopName,
-                    IsBrowserTab = true,
-                    BrowserName = pair.Key,
-                    BrowserTabId = tab.Id,
-                    BrowserWindowId = tab.WindowId,
-                    BrowserProcessId = tab.BrowserProcessId,
-                    FaviconUrl = tab.FaviconUrl,
-                    Url = tab.Url
-                });
+                    result.Add(new WindowInfo
+                    {
+                        Handle = window?.Handle ?? IntPtr.Zero,
+                        Title = string.IsNullOrWhiteSpace(tab.Title) ? tab.Url : tab.Title,
+                        ProcessName = browserProcess,
+                        ProcessId = window?.ProcessId ?? tab.BrowserProcessId,
+                        ClassName = window?.ClassName ?? string.Empty,
+                        IsMinimized = window?.IsMinimized ?? false,
+                        IsOnCurrentDesktop = window?.IsOnCurrentDesktop ?? true,
+                        DesktopId = window?.DesktopId ?? Guid.Empty,
+                        DesktopNumber = window?.DesktopNumber ?? 0,
+                        DesktopName = window?.DesktopName ?? string.Empty,
+                        IsBrowserTab = true,
+                        BrowserName = pair.Key,
+                        BrowserTabId = tab.Id,
+                        BrowserWindowId = tab.WindowId,
+                        BrowserProcessId = tab.BrowserProcessId,
+                        FaviconUrl = tab.FaviconUrl,
+                        Url = tab.Url
+                    });
+                }
             }
         }
 
@@ -173,7 +184,7 @@ public sealed class BrowserTabBridgeService : IDisposable
 
                 if (root.TryGetProperty("type", out var type) && type.GetString() == "tabs")
                 {
-                    var tabs = ParseTabs(root, browser);
+                    var tabs = ParseTabs(root);
                     var changed = !_tabs.TryGetValue(browser, out var previousTabs)
                         || !previousTabs.SequenceEqual(tabs);
                     _tabs[browser] = tabs;
@@ -205,7 +216,7 @@ public sealed class BrowserTabBridgeService : IDisposable
         }
     }
 
-    private List<BridgeTab> ParseTabs(JsonElement root, string browser)
+    private static List<BridgeTab> ParseTabs(JsonElement root)
     {
         var result = new List<BridgeTab>();
         if (!root.TryGetProperty("tabs", out var tabs)) return result;
@@ -222,27 +233,36 @@ public sealed class BrowserTabBridgeService : IDisposable
                 ReadString(item, "title"),
                 ReadString(item, "url"),
                 ReadString(item, "favIconUrl"),
-                processId));
+                processId,
+                item.TryGetProperty("active", out var active) && active.ValueKind == JsonValueKind.True));
         }
 
         return result;
     }
 
-    private WindowInfo? FindBrowserWindow(string processName, int processId, string tabTitle)
+    private static WindowInfo? FindBrowserWindow(
+        IReadOnlyList<WindowInfo> windows, IEnumerable<BridgeTab> tabs, bool onlyBrowserWindow)
     {
-        var windows = _windowService.GetAllWindows()
-            .Where(window => window.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var processId = tabs.First().BrowserProcessId;
         if (processId > 0)
         {
             var processWindows = windows.Where(window => window.ProcessId == processId).ToList();
             if (processWindows.Count > 0) windows = processWindows;
         }
 
-        return windows.FirstOrDefault(window =>
-                   !string.IsNullOrWhiteSpace(tabTitle) &&
-                   window.Title.Contains(tabTitle, StringComparison.OrdinalIgnoreCase))
-               ?? windows.FirstOrDefault();
+        if (onlyBrowserWindow && windows.Count == 1) return windows[0];
+
+        // Chromium shows the active tab's title in the native caption. Older messages
+        // may omit the active flag, in which case accept only a single matching HWND.
+        var activeTab = tabs.FirstOrDefault(tab => tab.IsActive && !string.IsNullOrWhiteSpace(tab.Title));
+        var titles = activeTab != null
+            ? new[] { activeTab.Title }
+            : tabs.Select(tab => tab.Title).Where(title => !string.IsNullOrWhiteSpace(title)).ToArray();
+        var matches = windows.Where(window => titles.Any(title =>
+                window.Title.Equals(title, StringComparison.OrdinalIgnoreCase) ||
+                window.Title.StartsWith(title + " - ", StringComparison.OrdinalIgnoreCase)))
+            .Take(2).ToList();
+        return matches.Count == 1 ? matches[0] : null;
     }
 
     private static string ProcessNameFor(string browser) => browser switch
@@ -264,7 +284,8 @@ public sealed class BrowserTabBridgeService : IDisposable
     private static string ReadString(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) ? value.GetString() ?? string.Empty : string.Empty;
 
-    private sealed record BridgeTab(string Id, string WindowId, string Title, string Url, string FaviconUrl, int BrowserProcessId);
+    private sealed record BridgeTab(
+        string Id, string WindowId, string Title, string Url, string FaviconUrl, int BrowserProcessId, bool IsActive);
 
     private sealed class BrowserConnection : IDisposable
     {

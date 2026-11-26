@@ -36,12 +36,6 @@ public sealed partial class MainPage : Page
     private readonly Dictionary<IntPtr, NativeMethods.RECT> _registeredThumbRects = new();
     private double _thumbRegistrationScrollY;
 
-    // ── Context-menu target tracking ──
-    // MenuFlyoutItem inside a ContextFlyout doesn't reliably inherit DataContext
-    // from its parent Border in WinUI 3 (flyouts live in a separate popup layer).
-    // We capture the target explicitly on RightTapped so all context handlers work.
-    private WindowItemViewModel? _contextMenuTarget;
-
     // ── Window subclass for clipboard messages ──
     private NativeMethods.SUBCLASSPROC? _subclassProc;
     private static readonly UIntPtr SUBCLASS_ID = (UIntPtr)1001;
@@ -57,6 +51,7 @@ public sealed partial class MainPage : Page
     {
         ViewModel = new MainViewModel();
         this.InitializeComponent();
+        InitializeSshWorkspace();
         _transcriptRecordingId = ViewModel.Calls.SelectedRecording?.Id;
         ViewModel.Calls.TranscriptPresentationChanged += Calls_TranscriptPresentationChanged;
         ViewModel.Calls.PropertyChanged += (_, args) =>
@@ -301,6 +296,7 @@ public sealed partial class MainPage : Page
             NativeMethods.SetFocus(hwnd);
         }
         this.Focus(FocusState.Programmatic);
+        if (ViewModel.IsSshFolderSelected) SshWorkspaceView.FocusSearch();
     }
 
     /// <summary>
@@ -355,6 +351,7 @@ public sealed partial class MainPage : Page
     {
         // Clear search so the overlay starts fresh next time
         ViewModel.ClearSearch();
+        SshWorkspaceView.Deactivate();
         FlushNotes();
         _thumbnailService.UnregisterAll();
         _registeredThumbRects.Clear();
@@ -861,7 +858,8 @@ public sealed partial class MainPage : Page
     private void KeyboardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         // Editable controls own their navigation keys; don't let global accelerators move selection.
-        if (IsAnyModalOpen || _isNotesFolderDialogOpen || IsCallsControlFocused() || IsNotesEditorFocused() || IsEditableInputFocused()) return;
+        if (IsAnyModalOpen || _isNotesFolderDialogOpen || ViewModel.IsSshFolderSelected ||
+            IsCallsControlFocused() || IsNotesEditorFocused() || IsEditableInputFocused()) return;
 
         bool searchBoxFocused = ReferenceEquals(FocusManager.GetFocusedElement(this.XamlRoot), SearchBox);
         
@@ -1010,6 +1008,24 @@ public sealed partial class MainPage : Page
 
         // The notes editor (WebView2) owns its keys (Ctrl+B, Tab, Enter, typing...).
         if (IsNotesEditorFocused()) return;
+
+        if (ViewModel.IsSshFolderSelected)
+        {
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                if (SshWorkspaceView.IsEditingMachine)
+                {
+                    SshWorkspaceView.Deactivate();
+                    SshWorkspaceView.FocusSearch();
+                }
+                else
+                {
+                    App.Current.HideOverlay();
+                }
+                e.Handled = true;
+            }
+            return;
+        }
 
         // Text-entry controls own keystrokes while focused. In particular, printable keys
         // must not be redirected to the global search box from Calls and Settings fields.
@@ -1167,16 +1183,15 @@ public sealed partial class MainPage : Page
                     break;
                 }
                 // If no windows match the search, use the launcher / run-fallback
-                if (ViewModel.IsSearchActive && ViewModel.Windows.Count == 0)
+                if (ViewModel.IsSearchActive && ViewModel.Windows.Count == 0 && ViewModel.CanLaunchFromSearch)
                 {
                     ViewModel.LaunchOrRun();
                     App.Current.HideOverlay();
                 }
                 else
                 {
-                    var switchHandle = ViewModel.SelectedWindow?.Model.Handle ?? IntPtr.Zero;
-                    ViewModel.SwitchToWindow(); // handles virtual desktop switching
-                    App.Current.HideOverlayAndSwitchTo(switchHandle);
+                    var bringToCurrentDesktop = (GetCurrentModifiers() & NativeMethods.MOD_SHIFT) != 0;
+                    ActivateWindow(ViewModel.SelectedWindow, bringToCurrentDesktop);
                 }
                 e.Handled = true;
                 break;
@@ -1236,11 +1251,7 @@ public sealed partial class MainPage : Page
     private void WindowGrid_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is WindowItemViewModel windowVm)
-        {
-            ViewModel.SelectedWindow = windowVm;
-            ViewModel.SwitchToWindow(); // handles virtual desktop switching
-            App.Current.HideOverlayAndSwitchTo(windowVm.Model.Handle);
-        }
+            ActivateWindow(windowVm);
     }
 
     /// <summary>
@@ -1251,11 +1262,17 @@ public sealed partial class MainPage : Page
     {
         if (sender is FrameworkElement fe && fe.DataContext is WindowItemViewModel windowVm)
         {
-            ViewModel.SelectedWindow = windowVm;
-            ViewModel.SwitchToWindow(); // handles virtual desktop switching
-            App.Current.HideOverlayAndSwitchTo(windowVm.Model.Handle);
+            ActivateWindow(windowVm);
             e.Handled = true;
         }
+    }
+
+    private void ActivateWindow(WindowItemViewModel? window, bool bringToCurrentDesktop = false)
+    {
+        if (window == null) return;
+        ViewModel.SelectedWindow = window;
+        if (ViewModel.TryActivateWindow(window, bringToCurrentDesktop))
+            App.Current.HideOverlayAndSwitchTo(window.Model.Handle);
     }
 
     private void WindowGrid_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1273,24 +1290,8 @@ public sealed partial class MainPage : Page
     // Window Card Context Menu Actions
     // ═══════════════════════════════════════════════════════════════
 
-    private void WindowCard_RightTapped(object sender, RightTappedRoutedEventArgs e)
-    {
-        // Store the DataContext now – before the flyout popup is shown – so
-        // context menu handlers can retrieve the correct WindowItemViewModel.
-        if (sender is FrameworkElement fe && fe.DataContext is WindowItemViewModel vm)
-            _contextMenuTarget = vm;
-    }
-
-    private WindowItemViewModel? GetWindowFromContextMenu(object sender)
-    {
-        // Prefer the explicitly tracked target (reliable across all WinUI 3 scenarios).
-        if (_contextMenuTarget != null)
-            return _contextMenuTarget;
-        // Fallback: try DataContext directly (may work in some layouts).
-        if (sender is MenuFlyoutItem item && item.DataContext is WindowItemViewModel vm)
-            return vm;
-        return null;
-    }
+    private static WindowItemViewModel? GetWindowFromContextMenu(object sender) =>
+        (sender as MenuFlyoutItem)?.CommandParameter as WindowItemViewModel;
 
     private void RecordHotkey_Click(object sender, RoutedEventArgs e)
     {
@@ -1305,14 +1306,11 @@ public sealed partial class MainPage : Page
 
     private static uint GetCurrentModifiers() => KeyboardHelper.GetCurrentModifiers();
 
-    private void ContextMenu_SwitchTo(object sender, RoutedEventArgs e)
-    {
-        var vm = GetWindowFromContextMenu(sender);
-        if (vm == null) return;
-        ViewModel.SelectedWindow = vm;
-        ViewModel.SwitchToWindow(); // handles virtual desktop switching
-        App.Current.HideOverlayAndSwitchTo(vm.Model.Handle);
-    }
+    private void ContextMenu_SwitchTo(object sender, RoutedEventArgs e) =>
+        ActivateWindow(GetWindowFromContextMenu(sender));
+
+    private void ContextMenu_BringToCurrentDesktop(object sender, RoutedEventArgs e) =>
+        ActivateWindow(GetWindowFromContextMenu(sender), bringToCurrentDesktop: true);
 
     private void ContextMenu_Minimize(object sender, RoutedEventArgs e)
     {
@@ -1382,7 +1380,10 @@ public sealed partial class MainPage : Page
     {
         if (sender is MenuFlyoutItem item && Enum.TryParse<SearchFilter>(item.Tag?.ToString(), out var filter))
             ViewModel.SetSearchFilter(filter);
-        SearchBox.Focus(FocusState.Programmatic);
+        if (ViewModel.IsSshFolderSelected)
+            SshWorkspaceView.FocusSearch();
+        else
+            SearchBox.Focus(FocusState.Programmatic);
     }
 
     private void CreateSuggestedFolder_Click(object sender, RoutedEventArgs e)

@@ -59,6 +59,7 @@
         <Compile Remove="BrowserExtension\**\*.cs" />
         <Compile Remove="NotesPlugin\**\*.cs" />
         <Compile Remove="AsrWorker\**\*.cs" />
+        <Compile Remove="SshTerminal\**\*.cs" />
         <Compile Remove="Tests\**\*.cs" />
         <EmbeddedResource Remove="BrowserExtension\**\*" />
         <None Remove="BrowserExtension\**\*" />
@@ -72,6 +73,7 @@
         <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.*" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
         <PackageReference Include="System.Drawing.Common" Version="10.0.3" />
+        <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
         <PackageReference Include="System.Text.Json" Version="9.*" />
         <PackageReference Include="NAudio" Version="2.4.0" />
 
@@ -130,6 +132,20 @@
         </ItemGroup>
         <Copy SourceFiles="@(_AsrWorkerFiles)"
               DestinationFiles="@(_AsrWorkerFiles->'$(PublishDir)asr-worker\%(RecursiveDir)%(Filename)%(Extension)')"
+              Condition="'$(PublishDir)' != ''" SkipUnchangedFiles="true" />
+    </Target>
+
+    <Target Name="PublishSshTerminal" AfterTargets="Build;Publish"
+            Condition="'$(Platform)' == 'x86' or '$(Platform)' == 'x64' or '$(Platform)' == 'ARM64'">
+        <PropertyGroup>
+            <_SshTerminalRid>win-$([System.String]::Copy('$(Platform)').ToLowerInvariant())</_SshTerminalRid>
+        </PropertyGroup>
+        <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)\SshTerminal\BetterWinTab.SshTerminal.csproj&quot; -c $(Configuration) -r $(_SshTerminalRid) --self-contained true -o &quot;$(OutDir)SshTerminal&quot;" />
+        <ItemGroup Condition="'$(PublishDir)' != ''">
+            <_SshTerminalFiles Include="$(OutDir)SshTerminal\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_SshTerminalFiles)"
+              DestinationFiles="@(_SshTerminalFiles->'$(PublishDir)SshTerminal\%(RecursiveDir)%(Filename)%(Extension)')"
               Condition="'$(PublishDir)' != ''" SkipUnchangedFiles="true" />
     </Target>
 </Project>

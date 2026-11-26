@@ -67,6 +67,7 @@ public class WindowFolder
             FolderType.Clipboard => "Clipboard history",
             FolderType.RecycleBin => "Recycle Bin",
             FolderType.Notes => "Your notes",
+            FolderType.Ssh => "Saved SSH connections",
             _ => ""
         };
     }
@@ -91,5 +92,6 @@ public enum FolderType
     /// <summary>Special notes folder — shows the rich-text notes editor.</summary>
     Notes,
     /// <summary>Special Calls workspace — recordings and transcripts.</summary>
-    Calls
+    Calls,
+    Ssh
 }

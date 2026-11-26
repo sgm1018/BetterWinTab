@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Models/FolderRule.cs" Link="FolderRule.cs" />
+    <Compile Include="../../Models/WindowFolder.cs" Link="WindowFolder.cs" />
+    <Compile Include="../../Models/WindowInfo.cs" Link="WindowInfo.cs" />
+    <Compile Include="../../Services/FolderService.cs" Link="FolderService.cs" />
+  </ItemGroup>
+</Project>

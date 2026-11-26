@@ -9,13 +9,10 @@ namespace BetterWinTab.Services;
 /// </summary>
 public class FolderService
 {
-    private readonly WindowEnumerationService _windowService;
-
     public ObservableCollection<WindowFolder> Folders { get; } = new();
 
-    public FolderService(WindowEnumerationService windowService)
+    public FolderService()
     {
-        _windowService = windowService;
         InitializeDefaultFolders();
     }
 
@@ -34,51 +31,51 @@ public class FolderService
     /// <summary>
     /// Refreshes the windows in all folders based on their filter rules.
     /// </summary>
-    public void RefreshAllFolders()
+    public void RefreshAllFolders(IReadOnlyList<WindowInfo> windows, IReadOnlyList<WindowInfo> browserTabs)
     {
-        var allWindows = _windowService.GetAllWindows();
-
         foreach (var folder in Folders)
         {
-            RefreshFolder(folder, allWindows);
+            RefreshFolder(folder, windows, browserTabs);
         }
     }
 
     /// <summary>
     /// Refreshes a single folder with the current list of windows.
     /// </summary>
-    public void RefreshFolder(WindowFolder folder, List<WindowInfo>? allWindows = null)
+    private static void RefreshFolder(
+        WindowFolder folder, IReadOnlyList<WindowInfo> windows, IReadOnlyList<WindowInfo> browserTabs)
     {
-        allWindows ??= _windowService.GetAllWindows();
-
         folder.Windows.Clear();
 
         // Special workspaces don't contain windows.
-        if (folder.Type is FolderType.Clipboard or FolderType.RecycleBin or FolderType.Notes or FolderType.Calls)
+        if (folder.Type is FolderType.Clipboard or FolderType.RecycleBin or FolderType.Notes or FolderType.Calls or FolderType.Ssh)
             return;
 
-        var filtered = folder.Type switch
+        IEnumerable<WindowInfo> filtered = folder.Type switch
         {
-            FolderType.All => allWindows,
-            FolderType.SmartProcess => allWindows
-                .Where(w => w.ProcessName.Equals(folder.ProcessFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList(),
-            FolderType.SmartClass => allWindows
-                .Where(w => w.ClassName.Equals(folder.ClassNameFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList(),
-            FolderType.SmartRules => folder.Rules != null
-                ? allWindows.Where(w => folder.Rules.Matches(w)).ToList()
-                : allWindows,
-            FolderType.Manual => allWindows
-                .Where(w => folder.ManualWindowHandles.Contains(w.Handle))
-                .ToList(),
-            _ => allWindows
+            FolderType.All => windows.Concat(browserTabs),
+            FolderType.SmartProcess => windows
+                .Where(w => w.ProcessName.Equals(folder.ProcessFilter, StringComparison.OrdinalIgnoreCase)),
+            FolderType.SmartClass => windows
+                .Where(w => w.ClassName.Equals(folder.ClassNameFilter, StringComparison.OrdinalIgnoreCase)),
+            FolderType.SmartRules when folder.Rules is { } rules => FilterByRules(rules, windows, browserTabs),
+            FolderType.Manual => windows.Where(w => folder.ManualWindowHandles.Contains(w.Handle)),
+            _ => windows
         };
 
         foreach (var window in filtered)
         {
             folder.Windows.Add(window);
         }
+    }
+
+    private static IEnumerable<WindowInfo> FilterByRules(
+        FolderRuleGroup rules, IReadOnlyList<WindowInfo> windows, IReadOnlyList<WindowInfo> browserTabs)
+    {
+        var candidates = rules.Conditions.Any(condition => condition.Field == RuleField.Domain)
+            ? windows.Concat(browserTabs)
+            : windows;
+        return candidates.Where(rules.Matches);
     }
 
     /// <summary>
@@ -204,6 +201,17 @@ public class FolderService
         return folder;
     }
 
+    public void CreateSshFolder()
+    {
+        Folders.Add(new WindowFolder
+        {
+            Name = "SSH",
+            Icon = "\uE756",
+            Type = FolderType.Ssh,
+            SortOrder = Folders.Count
+        });
+    }
+
     /// <summary>
     /// Removes a folder by its ID. Cannot remove built-in special folders.
     /// </summary>
@@ -212,7 +220,7 @@ public class FolderService
         var folder = Folders.FirstOrDefault(f => f.Id == folderId);
         if (folder == null || folder.Type == FolderType.All ||
             folder.Type == FolderType.Clipboard || folder.Type == FolderType.RecycleBin ||
-            folder.Type == FolderType.Notes || folder.Type == FolderType.Calls)
+            folder.Type == FolderType.Notes || folder.Type == FolderType.Calls || folder.Type == FolderType.Ssh)
             return false;
 
         return Folders.Remove(folder);

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using BetterWinTab.Services;
 
@@ -6,6 +8,7 @@ Directory.CreateDirectory(directory);
 try
 {
     using var service = new NotesService(directory);
+    var ssh = new SshMachineService(Path.Combine(directory, "ssh"));
     var changes = 0;
     var commands = new NotesBridgeCommands(service, (_, _) => changes++);
     JsonElement Call(string action, object arguments) => JsonSerializer.SerializeToElement(commands.Execute(
@@ -36,10 +39,31 @@ try
         Check(reloaded.Notes.Single().Title == "Nuevo", "Persistence reload failed.");
     Console.WriteLine("PASS: persistence, append, encoding, folder move, stale version, validation, unchanged body.");
 
+    if (OperatingSystem.IsWindows())
+    {
+        const string testPassword = "   ";
+        var protectedPassword = Convert.ToBase64String(ProtectedData.Protect(
+            Encoding.UTF8.GetBytes(testPassword), Encoding.UTF8.GetBytes("BetterWinTab SSH MCP v1"),
+            DataProtectionScope.CurrentUser));
+        JsonElement SshRequest(object arguments) =>
+            JsonSerializer.SerializeToElement(new { action = "create_ssh_machine", arguments });
+        Reject(() => SshBridgeCommands.Execute(
+            SshRequest(new { host = "192.0.2.10", username = "tester", password = testPassword }), ssh.Create));
+        Reject(() => SshBridgeCommands.Execute(
+            SshRequest(new { host = "192.0.2.10", username = "tester", passwordProtected = "invalid" }), ssh.Create));
+        var response = SshBridgeCommands.Execute(
+            SshRequest(new { host = "192.0.2.10", username = "tester", passwordProtected = protectedPassword }), ssh.Create);
+        var machine = ssh.GetMachines().Single();
+        Check(machine.Port == 22 && ssh.GetPassword(machine) == testPassword, "Credential was not stored.");
+        Check(!JsonSerializer.Serialize(response).Contains("password", StringComparison.OrdinalIgnoreCase), "Response leaked a password field.");
+        Console.WriteLine("PASS: SSH MCP accepts DPAPI payloads only, default port, credentials saved locally.");
+    }
+
     if (args.Contains("--serve"))
     {
         var pipeName = "BetterWinTab.Notes.Test." + Guid.NewGuid().ToString("N");
-        using var bridge = new NotesBridgeService(request => Task.FromResult(commands.Execute(request)), pipeName);
+        using var bridge = new NotesBridgeService(request => Task.FromResult(
+            SshBridgeCommands.Handles(request) ? SshBridgeCommands.Execute(request, ssh.Create) : commands.Execute(request)), pipeName);
         Console.WriteLine("READY " + pipeName);
         await Console.In.ReadLineAsync();
     }

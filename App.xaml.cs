@@ -100,16 +100,17 @@ namespace BetterWinTab
         {
             ServiceContainer.RegisterSingleton(() => new SettingsService());
             ServiceContainer.RegisterSingleton(() => new WindowEnumerationService());
-            ServiceContainer.RegisterSingleton(() => new BrowserTabBridgeService(
-                ServiceContainer.Resolve<WindowEnumerationService>()));
+            ServiceContainer.RegisterSingleton(() => new BrowserTabBridgeService());
             ServiceContainer.RegisterSingleton(() => new BrowserTabService(
                 ServiceContainer.Resolve<BrowserTabBridgeService>()));
-            ServiceContainer.RegisterSingleton(() => new FolderService(ServiceContainer.Resolve<WindowEnumerationService>()));
+            ServiceContainer.RegisterSingleton(() => new FolderService());
             ServiceContainer.RegisterSingleton(() => new FolderIndexService());
             ServiceContainer.RegisterSingleton(() => new LaunchService(ServiceContainer.Resolve<FolderIndexService>()));
             ServiceContainer.RegisterSingleton(() => new VirtualDesktopService());
             ServiceContainer.RegisterSingleton(() => new ClipboardService());
             ServiceContainer.RegisterSingleton(() => new NotesService());
+            ServiceContainer.RegisterSingleton(() => new SshMachineService());
+            ServiceContainer.RegisterSingleton(() => new SshTerminalService());
             ServiceContainer.RegisterSingleton(() => new AudioCaptureService());
             ServiceContainer.RegisterSingleton(() => new AudioDeviceService());
             ServiceContainer.RegisterSingleton(() => new AudioRecordingStoreService());

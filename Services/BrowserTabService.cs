@@ -30,9 +30,9 @@ public class BrowserTabService
         new("Brave", "brave", settings => settings.BraveEnabled, settings => settings.BravePort)
     };
 
-    public List<WindowInfo> GetTabs(BrowserTabSettings settings)
+    public List<WindowInfo> GetTabs(BrowserTabSettings settings, IReadOnlyList<WindowInfo> windows)
     {
-        var bridgedTabs = _bridge.GetTabs(settings);
+        var bridgedTabs = _bridge.GetTabs(settings, windows);
         if (bridgedTabs.Count > 0 || settings.Enabled)
             return bridgedTabs;
 

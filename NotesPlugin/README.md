@@ -1,6 +1,6 @@
 # BetterWinTab Notes
 
-Complemento local para crear y editar notas de BetterWinTab desde Codex en Windows. Incluye el servidor MCP y un puente en la aplicación. Necesita Node.js 22 o posterior; la app debe estar abierta en el mismo equipo. No necesita un servicio web ni claves API.
+Complemento local para gestionar notas y guardar máquinas SSH en BetterWinTab desde Codex en Windows. Incluye el servidor MCP y un puente en la aplicación. Requiere Node.js 22 o posterior y BetterWinTab abierto en el mismo equipo.
 
 ## Activar
 
@@ -36,6 +36,9 @@ Ejemplos:
 | `list_folders` | Lista las carpetas existentes y sus IDs. |
 | `create_note` | Crea y guarda una nota con título y texto. |
 | `update_note` | Cambia título, cuerpo, fuente o carpeta; permite añadir texto al final. |
+| `create_ssh_machine` | Guarda una máquina para abrirla desde SSH en BetterWinTab. |
+
+`create_ssh_machine` recibe `host` (IPv4 o IPv6), `username` y `password`. Admite `name` y `port` opcionales y usa el puerto 22 por defecto. El complemento protege la contraseña con Windows antes de enviarla por el puente y la omite del resultado. Para teclear una contraseña directamente en la app, usa el formulario SSH.
 
 Las actualizaciones requieren `expectedUpdatedAt`, obtenido con `get_note`. Si el usuario ha editado la nota mientras tanto, se devuelve un conflicto. Los campos omitidos se conservan. `appendText` conserva el HTML existente; `content` sustituye el cuerpo por texto plano codificado como HTML. El texto añadido se trata como texto, sin ejecutar etiquetas. Las notas no pueden borrarse a través del complemento.
 

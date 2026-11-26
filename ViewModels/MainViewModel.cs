@@ -109,6 +109,8 @@ public partial class MainViewModel : BaseViewModel
     public Microsoft.UI.Xaml.Visibility CallsFolderVisibility =>
         CallsFolderVM != null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
+    private FolderItemViewModel? _sshFolder;
+
     public NotesViewModel Notes { get; }
     public CallsViewModel Calls { get; }
 
@@ -316,9 +318,11 @@ public partial class MainViewModel : BaseViewModel
     public Visibility NotesPanelVisibility => IsNotesFolderSelected || _searchFilter == SearchFilter.Notes ? Visibility.Visible : Visibility.Collapsed;
     public bool IsCallsFolderSelected => SelectedFolder?.Model?.Type == FolderType.Calls;
     public Visibility CallsPanelVisibility => IsCallsFolderSelected || _searchFilter == SearchFilter.Calls ? Visibility.Visible : Visibility.Collapsed;
+    public bool IsSshFolderSelected => SelectedFolder?.Model.Type == FolderType.Ssh;
 
     public Visibility WindowGridVisibility =>
-        IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected || _searchFilter is SearchFilter.Clipboard or SearchFilter.Notes or SearchFilter.Calls
+        IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected || IsSshFolderSelected ||
+        _searchFilter is SearchFilter.Clipboard or SearchFilter.Notes or SearchFilter.Calls
             ? Visibility.Collapsed
             : Visibility.Visible;
 
@@ -341,7 +345,7 @@ public partial class MainViewModel : BaseViewModel
     [ObservableProperty]
     private string _newRuleValue = string.Empty;
 
-    public List<string> RuleFieldOptions { get; } = new() { "ProcessName", "Title", "ClassName" };
+    public List<string> RuleFieldOptions { get; } = Enum.GetNames<RuleField>().ToList();
     public List<string> RuleComparisonOptions { get; } = new() { "Equals", "Contains", "StartsWith", "EndsWith", "Regex" };
     public List<string> RuleOperatorOptions { get; } = new() { "OR", "AND" };
 
@@ -362,7 +366,24 @@ public partial class MainViewModel : BaseViewModel
     private SearchFilter _searchFilter = SearchFilter.All;
     private bool _changingSearchFilter;
     public bool IsAppSearchMode => _searchFilter == SearchFilter.Apps;
-    public string SearchModeLabel => _searchFilter.ToString();
+    public string SearchModeLabel => _searchFilter switch
+    {
+        SearchFilter.CurrentDesktop => "Current desktop",
+        SearchFilter.Ssh => "SSH",
+        _ => _searchFilter.ToString()
+    };
+    public bool CanLaunchFromSearch => _searchFilter is SearchFilter.All or SearchFilter.Apps;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowActivationMessageVisibility))]
+    private string _windowActivationMessage = string.Empty;
+
+    public Visibility WindowActivationMessageVisibility => string.IsNullOrEmpty(WindowActivationMessage)
+        ? Visibility.Collapsed
+        : Visibility.Visible;
+
+    partial void OnSelectedWindowChanged(WindowItemViewModel? value) =>
+        WindowActivationMessage = string.Empty;
 
     public void SetAppSearchMode(bool enabled)
         => SetSearchFilter(enabled ? SearchFilter.Apps : SearchFilter.All);
@@ -391,7 +412,9 @@ public partial class MainViewModel : BaseViewModel
             SearchFilter.Notes => NotesFolderVM,
             SearchFilter.Calls => CallsFolderVM,
             SearchFilter.Clipboard => ClipboardFolderVM,
-            _ when IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected => Folders.FirstOrDefault(),
+            SearchFilter.Ssh => _sshFolder,
+            _ when IsClipboardFolderSelected || IsNotesFolderSelected || IsCallsFolderSelected || IsSshFolderSelected
+                => Folders.FirstOrDefault(),
             _ => null
         };
         if (targetFolder != null && !ReferenceEquals(SelectedFolder, targetFolder))
@@ -413,7 +436,7 @@ public partial class MainViewModel : BaseViewModel
     private LaunchItemViewModel? _selectedLaunchItem;
 
     public bool IsSearchActive => !string.IsNullOrEmpty(SearchQuery);
-    public Visibility SearchClearVisibility => IsSearchActive ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility SearchClearVisibility => IsSearchActive && !IsSshFolderSelected ? Visibility.Visible : Visibility.Collapsed;
     public string SearchResultCount
     {
         get
@@ -431,7 +454,7 @@ public partial class MainViewModel : BaseViewModel
     }
 
     // Launch panel visibility helpers
-    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && !IsCallsFolderSelected && _searchFilter is not (SearchFilter.Apps or SearchFilter.Calls) && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShowEmptyDefault      => !IsSearchActive && SelectedFolder != ClipboardFolderVM && !IsNotesFolderSelected && !IsCallsFolderSelected && !IsSshFolderSelected && _searchFilter is not (SearchFilter.Apps or SearchFilter.Calls or SearchFilter.CurrentDesktop) && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowLaunchSuggestions =>
         (_searchFilter is SearchFilter.All or SearchFilter.Apps) && IsSearchActive &&
         Windows.Count == 0 && LaunchResults.Count > 0 && !ShowRecycleBinSuggestion
@@ -440,7 +463,8 @@ public partial class MainViewModel : BaseViewModel
     public Visibility ShowRunFallback       => IsSearchActive && Windows.Count == 0 && LaunchResults.Count == 0 && _searchFilter == SearchFilter.All && !ShowRecycleBinSuggestion ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowAppSearchPrompt => _searchFilter == SearchFilter.Apps && !IsSearchActive ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowNoWindowMatches =>
-        IsSearchActive && Windows.Count == 0 && _searchFilter is (SearchFilter.Windows or SearchFilter.Tabs)
+        Windows.Count == 0 && (_searchFilter == SearchFilter.CurrentDesktop ||
+            (IsSearchActive && _searchFilter is (SearchFilter.Windows or SearchFilter.Tabs)))
             ? Visibility.Visible
             : Visibility.Collapsed;
     public Visibility FolderSuggestionsVisibility =>
@@ -459,7 +483,8 @@ public partial class MainViewModel : BaseViewModel
         SelectedFolder?.Model?.Type != FolderType.All &&
         SelectedFolder?.Model?.Type != FolderType.Clipboard &&
         SelectedFolder?.Model?.Type != FolderType.RecycleBin &&
-        SelectedFolder?.Model?.Type != FolderType.Notes;
+        SelectedFolder?.Model?.Type != FolderType.Notes &&
+        !IsSshFolderSelected;
 
     private readonly List<WindowInfo> _cachedFolderWindows = new();
     private int _windowGridColumnCount = 1;
@@ -590,6 +615,12 @@ public partial class MainViewModel : BaseViewModel
             SaveSettings();
         }
 
+        if (!_folderService.Folders.Any(f => f.Type == FolderType.Ssh))
+        {
+            _folderService.CreateSshFolder();
+            SaveSettings();
+        }
+
         SyncFolders();
 
         if (Folders.Count > 0)
@@ -641,20 +672,21 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedFolderChanged(FolderItemViewModel? value)
     {
-        if (!_changingSearchFilter && value?.Model?.Type is FolderType.Notes or FolderType.Clipboard or FolderType.Calls)
+        if (!_changingSearchFilter && value?.Model?.Type is FolderType.Notes or FolderType.Clipboard or FolderType.Calls or FolderType.Ssh)
         {
             _searchFilter = value.Model.Type switch
             {
                 FolderType.Notes => SearchFilter.Notes,
                 FolderType.Calls => SearchFilter.Calls,
+                FolderType.Ssh => SearchFilter.Ssh,
                 _ => SearchFilter.Clipboard
             };
             OnPropertyChanged(nameof(IsAppSearchMode));
             OnPropertyChanged(nameof(SearchModeLabel));
         }
         else if (!_changingSearchFilter
-                 && _searchFilter is SearchFilter.Notes or SearchFilter.Clipboard or SearchFilter.Calls
-                 && value?.Model?.Type is not (FolderType.Notes or FolderType.Clipboard or FolderType.Calls))
+                 && _searchFilter is SearchFilter.Notes or SearchFilter.Clipboard or SearchFilter.Calls or SearchFilter.Ssh
+                 && value?.Model?.Type is not (FolderType.Notes or FolderType.Clipboard or FolderType.Calls or FolderType.Ssh))
         {
             _searchFilter = SearchFilter.All;
             OnPropertyChanged(nameof(IsAppSearchMode));
@@ -670,7 +702,8 @@ public partial class MainViewModel : BaseViewModel
             SelectedNonClipboardFolder = (value?.Model?.Type != FolderType.Clipboard &&
                                           value?.Model?.Type != FolderType.RecycleBin &&
                                           value?.Model?.Type != FolderType.Notes &&
-                                          value?.Model?.Type != FolderType.Calls) ? value : null;
+                                          value?.Model?.Type != FolderType.Calls &&
+                                          value?.Model?.Type != FolderType.Ssh) ? value : null;
             _syncingSelection = false;
         }
 
@@ -698,6 +731,8 @@ public partial class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(IsCallsFolderSelected));
         OnPropertyChanged(nameof(CallsPanelVisibility));
         OnPropertyChanged(nameof(CallsFolderIsSelected));
+        OnPropertyChanged(nameof(IsSshFolderSelected));
+        OnPropertyChanged(nameof(SearchClearVisibility));
     }
 
     private void NotifyNotesSelectionChanged()
@@ -747,6 +782,7 @@ public partial class MainViewModel : BaseViewModel
         RecycleBinFolderVM = null;
         NotesFolderVM = null;
         CallsFolderVM = null;
+        _sshFolder = null;
 
         foreach (var folder in _folderService.Folders)
         {
@@ -760,6 +796,8 @@ public partial class MainViewModel : BaseViewModel
                 NotesFolderVM = vm;
             else if (folder.Type == FolderType.Calls)
                 CallsFolderVM = vm;
+            else if (folder.Type == FolderType.Ssh)
+                _sshFolder = vm;
             else
                 NonClipboardFolders.Add(vm);
         }
@@ -772,41 +810,24 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     public void RefreshWindows()
     {
-        _folderService.RefreshAllFolders();
+        var windows = _windowService.GetAllWindows();
+        _virtualDesktopService.EnrichWindows(windows);
 
-        // Enrich ALL windows first so that the VirtualDesktopService discovers
-        // every desktop in the system. This ensures HasMultipleDesktops is correct
-        // regardless of which folder is currently selected.
-        var allFolder = _folderService.Folders.FirstOrDefault(f => f.Type == FolderType.All);
-        if (allFolder != null)
+        foreach (var window in windows)
         {
-            _virtualDesktopService.EnrichWindows(allFolder.Windows.ToList());
-
-            // Enrich pin status: prefer handle-based tracking (same session),
-            // then fall back to saved title-pattern matching (cross-session).
-            foreach (var w in allFolder.Windows)
-            {
-                w.IsPinned = _sessionPinnedHandles.Contains(w.Handle)
-                    || _settings.PinnedWindows.Any(p => p.Matches(w));
-            }
+            window.IsPinned = _sessionPinnedHandles.Contains(window.Handle)
+                || _settings.PinnedWindows.Any(pin => pin.Matches(window));
         }
+
+        var browserTabs = _settings.BrowserTabs.Enabled
+            ? _browserTabService.GetTabs(_settings.BrowserTabs, windows)
+            : [];
+        _folderService.RefreshAllFolders(windows, browserTabs);
 
         _cachedFolderWindows.Clear();
-        var selectedModel = SelectedFolder?.Model;
-        if (selectedModel != null)
-        {
-            foreach (var w in selectedModel.Windows)
-                _cachedFolderWindows.Add(w);
-
-            if (selectedModel.Type == FolderType.All && _settings.BrowserTabs.Enabled)
-                _cachedFolderWindows.AddRange(_browserTabService.GetTabs(_settings.BrowserTabs));
-        }
-
-        UpdateFolderSuggestions(allFolder?.Windows ?? []);
-
-        // WindowInfo objects are shared references across folders, so they
-        // already carry DesktopId / IsOnCurrentDesktop / DesktopNumber
-        // from the all-windows enrichment pass above.
+        if (SelectedFolder?.Model is { } folder)
+            _cachedFolderWindows.AddRange(folder.Windows);
+        UpdateFolderSuggestions(windows);
 
         // Always reset selection — old WindowItemViewModel instances are gone after clear
         SelectedWindow = null;
@@ -862,9 +883,10 @@ public partial class MainViewModel : BaseViewModel
     {
         var q = SearchQuery.Trim();
 
-        ShowRecycleBinSuggestion = RecycleBinMatcher.Matches(q);
+        ShowRecycleBinSuggestion = _searchFilter is not (SearchFilter.CurrentDesktop or SearchFilter.Ssh)
+            && RecycleBinMatcher.Matches(q);
 
-        if (_searchFilter == SearchFilter.Calls || IsCallsFolderSelected)
+        if (_searchFilter is SearchFilter.Calls or SearchFilter.Ssh || IsCallsFolderSelected || IsSshFolderSelected)
         {
             CancelSemanticSearch();
             Windows.Clear();
@@ -925,6 +947,8 @@ public partial class MainViewModel : BaseViewModel
         {
             SearchFilter.Windows => _cachedFolderWindows.Where(window => !window.IsBrowserTab).ToList(),
             SearchFilter.Tabs => _cachedFolderWindows.Where(window => window.IsBrowserTab).ToList(),
+            SearchFilter.CurrentDesktop => _cachedFolderWindows
+                .Where(window => window.IsOnCurrentDesktop && window.Handle != IntPtr.Zero).ToList(),
             _ => _cachedFolderWindows.ToList()
         };
 
@@ -937,15 +961,10 @@ public partial class MainViewModel : BaseViewModel
         }
         else
         {
-            // Fuzzy match against title and process name, keep the best score
-            // Multi-word token matching: each space-separated word must match at least
-            // one of: Title or ProcessName. ClassName is excluded because many Electron
-            // apps share Chrome_WidgetWin_1, causing false positives.
             source = filteredByType
                 .Select(w =>
                 {
-                    var (matched, score) = FuzzyMatcher.MultiWordMatch(
-                        new[] { w.Title, w.ProcessName }, q);
+                    var (matched, score) = MatchWindowQuery(w, q);
                     return (window: w, matched, score, rank: GetPersonalizedMatchScore(w, score));
                 })
                 .Where(x => x.matched)
@@ -1222,7 +1241,7 @@ public partial class MainViewModel : BaseViewModel
                     .Select(result =>
                     {
                         var window = windowsById[result.Id];
-                        var (_, lexicalScore) = FuzzyMatcher.MultiWordMatch(new[] { window.Title, window.ProcessName }, query);
+                        var (_, lexicalScore) = MatchWindowQuery(window, query);
                         var rank = result.Score * 0.65 + GetPersonalizedMatchScore(window, lexicalScore) * 0.35;
                         return (window, rank);
                     })
@@ -1249,6 +1268,9 @@ public partial class MainViewModel : BaseViewModel
         }
     }
 
+    private static (bool matched, int score) MatchWindowQuery(WindowInfo window, string query) =>
+        FuzzyMatcher.MultiWordMatch([window.Title, window.ProcessName, window.Url], query);
+
     private static string GetSemanticId(WindowInfo window)
         => window.IsBrowserTab
             ? $"tab:{window.BrowserName}:{window.BrowserTabId}"
@@ -1265,7 +1287,7 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSearchQueryChanged(string value)
     {
-        if (_searchFilter == SearchFilter.Notes || _searchFilter == SearchFilter.Clipboard)
+        if (_searchFilter is SearchFilter.Notes or SearchFilter.Clipboard or SearchFilter.Ssh)
         {
             ApplySearchFilter();
             return;
@@ -1387,35 +1409,34 @@ public partial class MainViewModel : BaseViewModel
         }
     }
 
-    /// <summary>
-    /// Switch to the selected window and hide overlay.
-    /// If the window is on a different virtual desktop, moves it to the current desktop first.
-    /// </summary>
-    [RelayCommand]
-    public void SwitchToWindow()
+    public bool TryActivateWindow(WindowItemViewModel item, bool bringToCurrentDesktop)
     {
-        if (SelectedWindow == null) return;
-
-        RecordUsage(GetWindowUsageId(SelectedWindow.Model));
-
-        var handle = SelectedWindow.Model.Handle;
-
-        if (SelectedWindow.Model.IsBrowserTab)
+        var window = item.Model;
+        if (!item.IsOnCurrentDesktop)
         {
-            _browserTabService.ActivateTab(SelectedWindow.Model);
-            IsOverlayVisible = false;
-            return;
+            if (!bringToCurrentDesktop)
+            {
+                WindowActivationMessage = "On another desktop. Use Shift+Enter to bring it here.";
+                return false;
+            }
+
+            if (window.Handle == IntPtr.Zero || !_virtualDesktopService.MoveWindowToCurrentDesktop(window.Handle))
+            {
+                WindowActivationMessage = "Windows could not move the window. Try Task View (Win+Tab).";
+                return false;
+            }
         }
 
-        // Move window to current desktop if it's on another one
-        if (!SelectedWindow.IsOnCurrentDesktop)
+        if (window.IsBrowserTab && !_browserTabService.ActivateTab(window))
         {
-            _virtualDesktopService.SwitchToWindowDesktop(handle);
+            WindowActivationMessage = "Could not open the browser tab.";
+            return false;
         }
 
-        // Focus is applied by App.HideOverlayAndSwitchTo after the overlay has hidden,
-        // so that Windows does not reassign focus when HideOverlay fires.
+        RecordUsage(GetWindowUsageId(window));
+        WindowActivationMessage = string.Empty;
         IsOverlayVisible = false;
+        return true;
     }
 
     /// <summary>
@@ -1555,6 +1576,13 @@ public partial class MainViewModel : BaseViewModel
     {
         if (NotesFolderVM != null)
             SelectedFolder = NotesFolderVM;
+    }
+
+    [RelayCommand]
+    public void SelectSshFolder()
+    {
+        if (_sshFolder != null)
+            SelectedFolder = _sshFolder;
     }
 
     [RelayCommand]
@@ -1907,7 +1935,7 @@ public partial class MainViewModel : BaseViewModel
     public void ShowEditFolderPanel(FolderItemViewModel folder)
     {
         if (folder.Model.Type == FolderType.All || folder.Model.Type == FolderType.Clipboard ||
-            folder.Model.Type == FolderType.Notes) return;
+            folder.Model.Type is FolderType.Notes or FolderType.Ssh) return;
 
         _editingFolder = folder;
         EditFolderName = folder.Name;
@@ -2010,7 +2038,7 @@ public partial class MainViewModel : BaseViewModel
         if (folder.Model.Type == FolderType.All ||
             folder.Model.Type == FolderType.Clipboard ||
             folder.Model.Type == FolderType.RecycleBin ||
-            folder.Model.Type == FolderType.Notes) return;
+            folder.Model.Type is FolderType.Notes or FolderType.Ssh) return;
 
         if (_folderService.RemoveFolder(folder.Model.Id))
         {
@@ -2094,7 +2122,7 @@ public partial class MainViewModel : BaseViewModel
         if (SelectedFolder.Model.Type == FolderType.All ||
             SelectedFolder.Model.Type == FolderType.Clipboard ||
             SelectedFolder.Model.Type == FolderType.RecycleBin ||
-            SelectedFolder.Model.Type == FolderType.Notes) return;
+            SelectedFolder.Model.Type is FolderType.Notes or FolderType.Ssh) return;
 
         if (_folderService.RemoveFolder(SelectedFolder.Model.Id))
         {

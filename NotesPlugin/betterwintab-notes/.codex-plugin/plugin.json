@@ -4,11 +4,11 @@
     "name": "BetterWinTab"
   },
   "name": "betterwintab-notes",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "interface": {
     "displayName": "BetterWinTab Notes",
-    "shortDescription": "Crea y modifica tus notas",
-    "longDescription": "Gestiona tus notas locales de BetterWinTab desde Codex. Busca, lee, crea y actualiza notas y consulta sus carpetas. Requiere BetterWinTab abierto en Windows y Node.js 22 o posterior.",
+    "shortDescription": "Gestiona notas y añade máquinas SSH",
+    "longDescription": "Busca, crea y actualiza notas locales de BetterWinTab y guarda máquinas SSH para abrirlas en la aplicación. Requiere BetterWinTab abierto en Windows y Node.js 22 o posterior.",
     "developerName": "BetterWinTab",
     "category": "Productivity",
     "capabilities": [
@@ -22,5 +22,5 @@
     ]
   },
   "mcpServers": "./.mcp.json",
-  "description": "Busca, crea y modifica notas en la app local BetterWinTab."
+  "description": "Gestiona notas y añade máquinas SSH a la app local BetterWinTab."
 }

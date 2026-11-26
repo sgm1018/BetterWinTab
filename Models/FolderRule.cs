@@ -2,7 +2,7 @@ namespace BetterWinTab.Models;
 
 /// <summary>
 /// A composite rule engine for Smart Folders.
-/// Supports AND/OR operators with multiple conditions on processName, title, and className.
+/// Supports AND/OR operators with conditions on process name, title, class name, and browser tab domain.
 /// </summary>
 public class FolderRuleGroup
 {
@@ -44,6 +44,9 @@ public class FolderRuleCondition
     /// </summary>
     public bool Matches(WindowInfo window)
     {
+        if (Field == RuleField.Domain)
+            return MatchesDomain(window);
+
         var fieldValue = Field switch
         {
             RuleField.ProcessName => window.ProcessName,
@@ -59,6 +62,46 @@ public class FolderRuleCondition
             RuleComparison.StartsWith => fieldValue.StartsWith(Value, StringComparison.OrdinalIgnoreCase),
             RuleComparison.EndsWith => fieldValue.EndsWith(Value, StringComparison.OrdinalIgnoreCase),
             RuleComparison.Regex => TryRegexMatch(fieldValue, Value),
+            _ => false
+        };
+    }
+
+    private bool MatchesDomain(WindowInfo window)
+    {
+        if (!window.IsBrowserTab || string.IsNullOrWhiteSpace(Value) ||
+            !Uri.TryCreate(window.Url, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
+            return false;
+
+        var host = uri.IdnHost.TrimEnd('.');
+        if (Comparison == RuleComparison.Regex)
+            return TryRegexMatch(host, Value);
+
+        var domain = Value.Trim().TrimEnd('.');
+        var domainType = Uri.CheckHostName(domain);
+        if (domainType == UriHostNameType.Unknown)
+            return false;
+
+        if (domainType == UriHostNameType.Dns)
+        {
+            try { domain = new System.Globalization.IdnMapping().GetAscii(domain); }
+            catch (ArgumentException) { return false; }
+        }
+        else if (domainType == UriHostNameType.IPv6)
+        {
+            domain = domain.Trim('[', ']');
+        }
+
+        const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
+        var exactMatch = host.Equals(domain, ignoreCase);
+        var canMatchLabels = uri.HostNameType == UriHostNameType.Dns && domainType == UriHostNameType.Dns;
+        // Domain containment means a parent domain, with a full label boundary.
+        return Comparison switch
+        {
+            RuleComparison.Equals => exactMatch,
+            RuleComparison.Contains or RuleComparison.EndsWith =>
+                exactMatch || (canMatchLabels && host.EndsWith($".{domain}", ignoreCase)),
+            RuleComparison.StartsWith =>
+                exactMatch || (canMatchLabels && host.StartsWith($"{domain}.", ignoreCase)),
             _ => false
         };
     }
@@ -99,7 +142,8 @@ public enum RuleField
 {
     ProcessName,
     Title,
-    ClassName
+    ClassName,
+    Domain
 }
 
 public enum RuleComparison

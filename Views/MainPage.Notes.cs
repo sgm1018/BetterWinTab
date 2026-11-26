@@ -28,6 +28,9 @@ public sealed partial class MainPage
         var commands = new NotesBridgeCommands(ServiceContainer.Resolve<NotesService>(), ViewModel.Notes.ApplyExternalChange);
         _notesBridge = new NotesBridgeService(request =>
         {
+            if (SshBridgeCommands.Handles(request))
+                return Task.FromResult(SshBridgeCommands.Execute(request, ServiceContainer.Resolve<SshMachineService>().Create));
+
             var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (!DispatcherQueue.TryEnqueue(async () =>
             {

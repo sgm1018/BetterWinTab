@@ -1,21 +1,62 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
+import net from 'node:net';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { handle, validate, tools } from '../betterwintab-notes/server/index.mjs';
+import { callBridge, handle, validate, tools } from '../betterwintab-notes/server/index.mjs';
+
+test('retries a pipe that was not listening before the request was sent', { skip: process.platform !== 'win32' }, async () => {
+  const pipeName = 'BetterWinTab.Notes.Retry.' + randomUUID();
+  const bridge = net.createServer(socket => {
+    socket.once('data', () => socket.end('{"ok":true,"result":{"connected":true}}\n'));
+  });
+  const start = setTimeout(() => bridge.listen('\\\\.\\pipe\\' + pipeName), 65);
+  try {
+    assert.deepEqual(await callBridge('status', {}, pipeName), { connected: true });
+  } finally {
+    clearTimeout(start);
+    if (bridge.listening) await new Promise(resolve => bridge.close(resolve));
+  }
+});
 
 test('MCP discovery, notifications and invalid arguments', async () => {
   const init = await handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
   assert.equal(init.result.protocolVersion, '2025-06-18');
-  assert.equal((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.length, 6);
+  assert.equal((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).result.tools.length, 7);
   assert.equal(await handle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);
   assert.throws(() => validate('create_note', { title: 'missing content' }));
   assert.throws(() => validate('list_notes', { limit: 500 }));
   assert.throws(() => validate('get_note', { id: 'x', arbitraryPath: 'x' }));
   assert.throws(() => validate('update_note', { id: 'x', expectedUpdatedAt: 'x', content: '', appendText: 'x' }));
   assert.equal(tools.find(t => t.name === 'update_note').annotations.destructiveHint, true);
+});
+
+test('SSH machine creation is a local write with validated credentials and sanitized output', async () => {
+  const tool = tools.find(t => t.name === 'create_ssh_machine');
+  assert.deepEqual(tool.inputSchema.required, ['host', 'username', 'password']);
+  assert.equal(tool.inputSchema.properties.name.maxLength, 100);
+  assert.equal(tool.inputSchema.properties.port.default, 22);
+  assert.equal(tool.inputSchema.properties.username.maxLength, 255);
+  assert.equal(tool.annotations.readOnlyHint, false);
+  assert.equal(tool.annotations.openWorldHint, false);
+  const args = { name: 'Lab', host: '192.0.2.23', port: 2222, username: 'tester', password: 'test only' };
+  assert.doesNotThrow(() => validate(tool.name, args));
+  assert.throws(() => validate(tool.name, { ...args, host: 'example.test' }));
+  assert.throws(() => validate(tool.name, { ...args, port: 0 }));
+  assert.throws(() => validate(tool.name, { ...args, password: '' }));
+  assert.doesNotThrow(() => validate(tool.name, { ...args, password: '   ' }));
+  assert.doesNotThrow(() => validate(tool.name, { ...args, password: 'é'.repeat(2048) }));
+  assert.throws(() => validate(tool.name, { ...args, password: 'é'.repeat(2049) }), /4096 bytes/);
+
+  const request = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: tool.name, arguments: args } };
+  const result = await handle(request, async () => ({ id: 'ssh-test', ...args }));
+  assert.equal(result.result.isError, false);
+  assert.deepEqual(JSON.parse(result.result.content[0].text), {
+    id: 'ssh-test', name: 'Lab', host: '192.0.2.23', port: 2222, username: 'tester',
+  });
 });
 
 test('stdio MCP to actual C# named pipe and persistence', { timeout: 30000 }, async () => {
@@ -45,7 +86,7 @@ test('stdio MCP to actual C# named pipe and persistence', { timeout: 30000 }, as
   };
   try {
     await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
-    assert.equal((await rpc('tools/list')).tools.length, 6);
+    assert.equal((await rpc('tools/list')).tools.length, 7);
     assert.equal((await call('status')).connected, true);
     const created = await call('create_note', { title: 'Integración áé', content: 'Línea 1\nLínea 2' });
     const note = await call('get_note', { id: created.id });
@@ -57,6 +98,13 @@ test('stdio MCP to actual C# named pipe and persistence', { timeout: 30000 }, as
     assert.match(conflict.content[0].text, /ha cambiado/);
     assert.equal((await call('list_notes', { query: 'Integración' })).total, 1);
     assert.equal((await call('list_folders')).folders.length, 1);
+    if (process.platform === 'win32') {
+      const machine = await call('create_ssh_machine', {
+        name: 'SSH integration', host: '2001:db8::23', username: 'tester', password: 'solo de prueba ñ!&',
+      });
+      assert.ok(machine.id);
+      assert.deepEqual(machine, { id: machine.id, name: 'SSH integration', host: '2001:db8::23', port: 22, username: 'tester' });
+    }
     server.stdin.write('{invalid json}\n');
     assert.equal(JSON.parse((await once(replies, 'line'))[0]).error.code, -32700);
   } finally {

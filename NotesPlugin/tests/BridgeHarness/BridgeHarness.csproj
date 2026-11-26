@@ -7,10 +7,14 @@
     <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <Compile Include="../../../Models/Note.cs" Link="Note.cs" />
     <Compile Include="../../../Models/NoteFolder.cs" Link="NoteFolder.cs" />
+    <Compile Include="../../../Models/SshMachine.cs" Link="SshMachine.cs" />
     <Compile Include="../../../Services/NotesService.cs" Link="NotesService.cs" />
     <Compile Include="../../../Services/NotesBridgeCommands.cs" Link="NotesBridgeCommands.cs" />
     <Compile Include="../../../Services/NotesBridgeService.cs" Link="NotesBridgeService.cs" />
+    <Compile Include="../../../Services/SshMachineService.cs" Link="SshMachineService.cs" />
+    <Compile Include="../../../Services/SshBridgeCommands.cs" Link="SshBridgeCommands.cs" />
   </ItemGroup>
 </Project>

@@ -9,6 +9,7 @@
     xmlns:conv="using:BetterWinTab.Converters"
     xmlns:models="using:BetterWinTab.Models"
     xmlns:controls="using:BetterWinTab.Controls"
+    xmlns:views="using:BetterWinTab.Views"
     mc:Ignorable="d"
     RequestedTheme="Dark"
     IsTabStop="True"
@@ -159,10 +160,12 @@
                     <Button.Flyout>
                         <MenuFlyout>
                             <MenuFlyoutItem Text="All" Tag="All" Click="SearchFilter_Click" />
+                            <MenuFlyoutItem Text="Current desktop" Tag="CurrentDesktop" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Windows" Tag="Windows" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Tabs" Tag="Tabs" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Apps" Tag="Apps" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Notes" Tag="Notes" Click="SearchFilter_Click" />
+                            <MenuFlyoutItem Text="SSH" Tag="Ssh" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Calls" Tag="Calls" Click="SearchFilter_Click" />
                             <MenuFlyoutItem Text="Clipboard" Tag="Clipboard" Click="SearchFilter_Click" />
                         </MenuFlyout>
@@ -173,7 +176,8 @@
                 <TextBox
                     x:Name="SearchBox"
                     Grid.Column="2"
-                    PlaceholderText="Search windows or launch apps..."
+                    Visibility="{x:Bind ViewModel.IsSshFolderSelected, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                    PlaceholderText="Search windows, tab URLs, or apps..."
                     Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     Background="Transparent"
                     BorderThickness="0"
@@ -184,12 +188,19 @@
                     VerticalAlignment="Center"
                     IsTabStop="True" />
 
-                <TextBlock
-                    Grid.Column="3"
-                    Text="{x:Bind ViewModel.SemanticEmbeddingsStatus, Mode=OneWay}"
-                    Foreground="{StaticResource TextMutedBrush}"
-                    FontSize="{StaticResource FontSizeSmall}"
-                    VerticalAlignment="Center" />
+                <StackPanel Grid.Column="3" VerticalAlignment="Center"
+                            Visibility="{x:Bind ViewModel.IsSshFolderSelected, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                    <TextBlock
+                        Text="{x:Bind ViewModel.SemanticEmbeddingsStatus, Mode=OneWay}"
+                        Foreground="{StaticResource TextMutedBrush}"
+                        FontSize="{StaticResource FontSizeSmall}" />
+                    <TextBlock
+                        Text="{x:Bind ViewModel.WindowActivationMessage, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.WindowActivationMessageVisibility, Mode=OneWay}"
+                        AutomationProperties.LiveSetting="Polite"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        FontSize="{StaticResource FontSizeSmall}" />
+                </StackPanel>
 
                 <!-- Result count badge -->
                 <Border
@@ -235,10 +246,10 @@
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <StackPanel Grid.Row="0" Padding="20,24,20,16">
+            <StackPanel Grid.Row="0" Padding="16,14,16,10">
                 <TextBlock
                     Text="BetterWinTab"
-                    FontSize="{StaticResource FontSizeXLarge}"
+                    FontSize="{StaticResource FontSizeLarge}"
                     FontWeight="Bold"
                     Foreground="{StaticResource NeonGreenBrush}" />
                 <TextBlock
@@ -251,7 +262,7 @@
                 <Border
                     Height="1"
                     Background="{StaticResource NeonGreenSubtleBrush}"
-                    Margin="0,16,0,0" />
+                    Margin="0,10,0,0" />
             </StackPanel>
 
             <!-- Folder List -->
@@ -274,7 +285,7 @@
                 Padding="8,0">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="vm:FolderItemViewModel">
-                        <Grid Padding="12,10" ColumnSpacing="12"
+                        <Grid Padding="10,4" ColumnSpacing="9"
                               Background="{x:Bind BackgroundBrush}" CornerRadius="6"
                               AllowDrop="True"
                               DragOver="FolderItem_DragOver"
@@ -301,7 +312,7 @@
                                 Grid.Column="0"
                                 Grid.RowSpan="2"
                                 Glyph="{x:Bind Icon}"
-                                FontSize="22"
+                                FontSize="18"
                                 Foreground="{StaticResource NeonGreenBrush}"
                                 VerticalAlignment="Center" />
 
@@ -310,7 +321,7 @@
                                 Grid.Column="1"
                                 Grid.Row="0"
                                 Text="{x:Bind Name}"
-                                FontSize="{StaticResource FontSizeMedium}"
+                                FontSize="{StaticResource FontSizeBase}"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource TextPrimaryBrush}" />
 
@@ -328,7 +339,8 @@
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0,2" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="MinHeight" Value="42" />
                         <Setter Property="CornerRadius" Value="8" />
                         <Setter Property="IsTabStop" Value="False" />
                         <Setter Property="AllowFocusOnInteraction" Value="False" />
@@ -406,11 +418,11 @@
             </ListView>
 
             <!-- Bottom Actions -->
-            <StackPanel Grid.Row="2" Padding="16" Spacing="8">
-                <Border Height="1" Background="{StaticResource NeonGreenSubtleBrush}" Margin="0,0,0,8" />
+            <StackPanel Grid.Row="2" Padding="12,8" Spacing="4">
+                <Border Height="1" Background="{StaticResource NeonGreenSubtleBrush}" Margin="0,0,0,2" />
 
                 <!-- Recycle Bin Folder (pinned special folder — opens Windows Recycle Bin) -->
-                <Grid CornerRadius="8" Margin="0,0,0,4"
+                <Grid CornerRadius="8"
                       Visibility="{x:Bind ViewModel.RecycleBinFolderVisibility, Mode=OneWay}">
                     <!-- Selection highlight -->
                     <Border CornerRadius="8" BorderThickness="2"
@@ -422,7 +434,7 @@
                             Command="{x:Bind ViewModel.SelectRecycleBinFolderCommand}"
                             Background="Transparent" BorderThickness="0" Padding="0"
                             HorizontalContentAlignment="Stretch">
-                        <Grid Padding="12,10" ColumnSpacing="12">
+                        <Grid Padding="10,4" ColumnSpacing="9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -431,10 +443,10 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE107;" FontSize="22"
+                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE107;" FontSize="18"
                                       Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Grid.Row="0" Text="Recycle Bin"
-                                       FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                       FontSize="{StaticResource FontSizeBase}" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Grid.Column="1" Grid.Row="1" Text="Opens Windows Recycle Bin"
                                        FontSize="{StaticResource FontSizeSmall}"
@@ -444,7 +456,7 @@
                 </Grid>
 
                 <!-- Calls workspace, pinned below Notes -->
-                <Grid CornerRadius="8" Margin="0,0,0,4"
+                <Grid CornerRadius="8"
                       Visibility="{x:Bind ViewModel.CallsFolderVisibility, Mode=OneWay}">
                     <Border CornerRadius="8" BorderThickness="2"
                             Background="{StaticResource FolderSelectedBrush}"
@@ -455,7 +467,7 @@
                             Command="{x:Bind ViewModel.SelectCallsFolderCommand}"
                             Background="Transparent" BorderThickness="0" Padding="0"
                             HorizontalContentAlignment="Stretch">
-                        <Grid Padding="12,10" ColumnSpacing="12">
+                        <Grid Padding="10,4" ColumnSpacing="9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -464,10 +476,10 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE720;" FontSize="22"
+                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE720;" FontSize="18"
                                       Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Grid.Row="0" Text="Calls"
-                                       FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                       FontSize="{StaticResource FontSizeBase}" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Grid.Column="1" Grid.Row="1" Text="Recordings"
                                        FontSize="{StaticResource FontSizeSmall}"
@@ -477,7 +489,7 @@
                 </Grid>
 
                 <!-- Clipboard Folder (pinned above action buttons) -->
-                <Grid CornerRadius="8" Margin="0,0,0,4"
+                <Grid CornerRadius="8"
                       Visibility="{x:Bind ViewModel.ClipboardFolderVisibility, Mode=OneWay}">
                     <!-- Selection highlight -->
                     <Border CornerRadius="8" BorderThickness="2"
@@ -489,7 +501,7 @@
                             Command="{x:Bind ViewModel.SelectClipboardFolderCommand}"
                             Background="Transparent" BorderThickness="0" Padding="0"
                             HorizontalContentAlignment="Stretch">
-                        <Grid Padding="12,10" ColumnSpacing="12">
+                        <Grid Padding="10,4" ColumnSpacing="9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -498,10 +510,10 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE8C8;" FontSize="22"
+                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE8C8;" FontSize="18"
                                       Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Grid.Row="0" Text="Clipboard"
-                                       FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                       FontSize="{StaticResource FontSizeBase}" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Grid.Column="1" Grid.Row="1" Text="Clipboard history"
                                        FontSize="{StaticResource FontSizeSmall}"
@@ -511,7 +523,7 @@
                 </Grid>
 
                 <!-- Notes Folder (pinned below Clipboard) -->
-                <Grid CornerRadius="8" Margin="0,0,0,4"
+                <Grid CornerRadius="8"
                       Visibility="{x:Bind ViewModel.NotesFolderVisibility, Mode=OneWay}">
                     <!-- Selection highlight -->
                     <Border CornerRadius="8" BorderThickness="2"
@@ -523,7 +535,7 @@
                             Command="{x:Bind ViewModel.SelectNotesFolderCommand}"
                             Background="Transparent" BorderThickness="0" Padding="0"
                             HorizontalContentAlignment="Stretch">
-                        <Grid Padding="12,10" ColumnSpacing="12">
+                        <Grid Padding="10,4" ColumnSpacing="9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -532,10 +544,10 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE70B;" FontSize="22"
+                            <FontIcon Grid.Column="0" Grid.RowSpan="2" Glyph="&#xE70B;" FontSize="18"
                                       Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Grid.Row="0" Text="Notes"
-                                       FontSize="{StaticResource FontSizeMedium}" FontWeight="SemiBold"
+                                       FontSize="{StaticResource FontSizeBase}" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Grid.Column="1" Grid.Row="1"
                                        Text="{x:Bind ViewModel.Notes.NotesCountLabel, Mode=OneWay}"
@@ -545,10 +557,36 @@
                     </Button>
                 </Grid>
 
+                <Grid CornerRadius="8">
+                    <Border CornerRadius="8" BorderThickness="2"
+                            Background="{StaticResource FolderSelectedBrush}"
+                            BorderBrush="{StaticResource NeonGreenBrush}"
+                            Visibility="{x:Bind ViewModel.IsSshFolderSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            IsHitTestVisible="False" />
+                    <Button HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.SelectSshFolderCommand}"
+                            Background="Transparent" BorderThickness="0" Padding="0"
+                            AutomationProperties.Name="SSH"
+                            HorizontalContentAlignment="Stretch">
+                        <Grid Padding="10,4" ColumnSpacing="9" MinHeight="34">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE756;" FontSize="18"
+                                      Foreground="{StaticResource NeonGreenBrush}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="SSH" VerticalAlignment="Center"
+                                       FontSize="{StaticResource FontSizeBase}" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                        </Grid>
+                    </Button>
+                </Grid>
+
                 <Button
                     Content="+ Add Folder"
                     Command="{x:Bind ViewModel.ShowAddFolderPanelCommand}"
                     Style="{StaticResource NeonButtonStyle}"
+                    Padding="8,4" MinHeight="32" FontSize="{StaticResource FontSizeBase}"
                     HorizontalAlignment="Stretch" />
 
                 <Button
@@ -556,26 +594,28 @@
                     Command="{x:Bind ViewModel.DeleteSelectedFolderCommand}"
                     IsEnabled="{x:Bind ViewModel.CanDeleteSelectedFolder, Mode=OneWay}"
                     Style="{StaticResource DangerButtonStyle}"
+                    Padding="8,4" MinHeight="32" FontSize="{StaticResource FontSizeBase}"
                     HorizontalAlignment="Stretch" />
 
                 <Button
                     Content="&#xE713; Settings"
                     Command="{x:Bind ViewModel.Settings.ShowSettingsPanelCommand}"
                     Style="{StaticResource NeonButtonStyle}"
+                    Padding="8,4" MinHeight="32" FontSize="{StaticResource FontSizeBase}"
                     HorizontalAlignment="Stretch"
                     Opacity="0.7" />
 
                 <!-- Social Links -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16" Margin="0,4,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
                     <Button ToolTipService.ToolTip="LinkedIn" Click="LinkedIn_Click"
-                            Background="Transparent" BorderThickness="0" Padding="4" Width="36" Height="36">
-                        <Viewbox Width="20" Height="20">
+                            Background="Transparent" BorderThickness="0" Padding="4" Width="32" Height="32">
+                        <Viewbox Width="16" Height="16">
                             <Path Fill="White" Stretch="Uniform" Data="M19 0H5C2.239 0 0 2.239 0 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5V5c0-2.761-2.238-5-5-5zM8 19H5V8h3v11zM6.5 6.732c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zM20 19h-3v-5.604c0-3.368-4-3.113-4 0V19h-3V8h3v1.765C14.396 7.179 20 6.988 20 12.241V19z" />
                         </Viewbox>
                     </Button>
                     <Button ToolTipService.ToolTip="GitHub" Click="GitHub_Click"
-                            Background="Transparent" BorderThickness="0" Padding="4" Width="36" Height="36">
-                        <Viewbox Width="20" Height="20">
+                            Background="Transparent" BorderThickness="0" Padding="4" Width="32" Height="32">
+                        <Viewbox Width="16" Height="16">
                             <Path Fill="White" Stretch="Uniform" Data="M12 0c-6.627 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.6.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.106-.774.418-1.305.761-1.604-2.666-.304-5.467-1.333-5.467-5.93 0-1.312.469-2.382 1.236-3.222-.124-.303-.535-1.524.117-3.176 0 0 1.009-.322 3.301 1.23A11.513 11.513 0 0112 5.802c1.02.004 2.047.138 3.006.404 2.291-1.552 3.3-1.23 3.3-1.23.653 1.653.242 2.874.118 3.176.768.84 1.236 1.91 1.236 3.222 0 4.609-2.804 5.625-5.475 5.921.43.371.813 1.102.813 2.222v3.293c0 .319.192.694.801.576C20.565 21.796 24 17.299 24 12c0-6.627-5.373-12-12-12z" />
                         </Viewbox>
                     </Button>
@@ -682,27 +722,30 @@
                     <DataTemplate x:DataType="vm:WindowItemViewModel">
                         <Border Style="{StaticResource WindowCardStyle}" Margin="6"
                                 CanDrag="True" DragStarting="WindowCard_DragStarting"
-                                Tapped="WindowCard_Tapped"
-                                RightTapped="WindowCard_RightTapped">
+                                Tapped="WindowCard_Tapped">
                             <Border.ContextFlyout>
                                 <MenuFlyout>
-                                    <MenuFlyoutItem Text="Switch To" Click="ContextMenu_SwitchTo">
+                                    <MenuFlyoutItem Text="Switch To" CommandParameter="{x:Bind}"
+                                                    IsEnabled="{x:Bind IsOnCurrentDesktop}" Click="ContextMenu_SwitchTo">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE8A7;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
-                                    <MenuFlyoutItem Text="Pin / Unpin" Click="ContextMenu_TogglePin">
+                                    <MenuFlyoutItem Text="Bring to this desktop" CommandParameter="{x:Bind}"
+                                                    Click="ContextMenu_BringToCurrentDesktop"
+                                                    Visibility="{x:Bind CanBringToCurrentDesktop, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <MenuFlyoutItem Text="Pin / Unpin" CommandParameter="{x:Bind}" Click="ContextMenu_TogglePin">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE718;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
-                                    <MenuFlyoutItem Text="Minimize" Click="ContextMenu_Minimize">
+                                    <MenuFlyoutItem Text="Minimize" CommandParameter="{x:Bind}" Click="ContextMenu_Minimize">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE921;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
                                     <MenuFlyoutSeparator />
-                                    <MenuFlyoutItem Text="Close Window" Click="ContextMenu_Close">
+                                    <MenuFlyoutItem Text="Close Window" CommandParameter="{x:Bind}" Click="ContextMenu_Close">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE711;" Foreground="#FF4444" />
                                         </MenuFlyoutItem.Icon>
@@ -1385,6 +1428,9 @@
                     </StackPanel>
                 </Grid>
             </Grid>
+
+            <views:SshWorkspace x:Name="SshWorkspaceView" Grid.Row="0" Grid.RowSpan="2"
+                                Visibility="{x:Bind ViewModel.IsSshFolderSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
 
             <!-- Calls workspace: library, two reading panes and one composer. -->
             <Grid x:Name="CallsPanel" Grid.Row="0" Grid.RowSpan="2"

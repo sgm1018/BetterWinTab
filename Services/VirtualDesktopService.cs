@@ -205,7 +205,7 @@ public class VirtualDesktopService
     /// After moving, calls SetForegroundWindow to activate it.
     /// </summary>
     /// <returns>true if the window was moved or was already on the current desktop.</returns>
-    public bool SwitchToWindowDesktop(IntPtr hWnd)
+    public bool MoveWindowToCurrentDesktop(IntPtr hWnd)
     {
         if (_manager == null) return false;
 

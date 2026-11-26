@@ -8,5 +8,7 @@ public enum SearchFilter
     Apps,
     Notes,
     Clipboard,
-    Calls
+    Calls,
+    CurrentDesktop,
+    Ssh
 }

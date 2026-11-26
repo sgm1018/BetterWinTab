@@ -314,8 +314,7 @@
             }
         }
         if (!text) return;
-        if (inCode || !/\r?\n/.test(text)) exec('insertText', text);
-        else exec('insertHTML', text.split(/\r?\n/).map(line => `<p>${NE.escapeHtml(line) || '<br>'}</p>`).join(''));
+        exec('insertText', text.replace(/\r\n?/g, '\n'));
         afterPaste();
     });
 
